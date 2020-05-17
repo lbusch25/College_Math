@@ -1,0 +1,228 @@
+
+# Technical Report 2: Finite Difference Derivatives
+
+## The scenario
+
+Your company, CLA365 Inc., has been hired by an outside firm to consult on a computational linear algebra project about network analysis.
+
+The Analytics Group at Wikipedia is interested in comparing different ways of ranking the various pages on the Wikipedia site.  They have been using Page Rank, and they know about Degree Rank. They are interested in having you implement the Katz Status Index. It is an index developed in the 1950's by Leo Katz to study social networks (he published it in the journal Psychometrica). Implementing and understanding it requires linear algebra knowledge, which is why you have been hired. 
+
+Here are some places where you can learn about it:
+
+- Some [notes](https://drive.google.com/file/d/1WCN41h89tNuA26EH2BQPDB_OfYAldAi-/view?usp=sharing) written up by an intern who worked for Wikipedia last summer.
+- The [Wikipedia page](https://en.wikipedia.org/wiki/Katz_centrality) (!!) on Katz centrality
+- A few useful links found by a google search: [link1](https://www.scribd.com/document/79211179/04-Centrality-Indices) | [link2](https://books.google.com/books?id=LCXjxFbN7fcC&pg=PA502&lpg=PA502&dq=%22katz+status+index%22&source=bl&ots=O39_44_pmt&sig=qADTHsr8Onzw4-ydqPktHOlJuw0&hl=en&sa=X&ei=Oc4wUZ6YE-GIygHu2IGQDA&ved=0CEIQ6AEwAw#v=onepage&q=%22katz%20status%20index%22&f=false) | [link3](https://books.google.com/books?id=YeXLbClh1SIC&pg=PT85&lpg=PT85&dq=%22katz+status+index%22&source=bl&ots=0Cj1F9GLD2&sig=3Hvd73f9ruI0LPxoImK2wXN7bds&hl=en&sa=X&ei=EdswUfvhNMSbygHtxICADw&ved=0CD4Q6AEwAg#v=onepage&q=%22katz%20status%20index%22&f=false)
+- A workplace influence [example](https://drive.google.com/file/d/1xI0JESWgDXOP0yDqnK74-86xCDBnjcTM/view?usp=sharing) that uses Katz centrality
+
+The analytics team would like you to understand and implement the Katz ranking. Throughout the project, you should use sparse matrices, in case the client would like to use any of your code on larger examples.
+
+## Part 1
+
+They would like you to do the following:
+
+- As an illustrative example of how this works, they would like you to implement the workplace influence network example described above in the intern's notes.
+- In this example, they would like to see each step of the Jacobi iteration unfold.
+- They would like to see it for various values of the attenuation factor alpha.
+- They would like to know for which values of the attenuation factor your algorithm converges.
+- They would like an intuitive understanding of the role of alpha and the relation of the Katz index to the in-degree rank.
+- They would like to see you derive the Jacobi iteration from the Ax=b problem and relate the resulting iteration back to the Katz matrix and Katz status index.
+
+
+```{r}
+library(Matrix)
+
+# Vector norm
+vnorm = function(v,p=2) { 
+  if ( p =="I") {
+    return(max(abs(v)))
+  }
+  else {
+    return(sum(abs(v)^p)^(1/p))
+  }
+}
+
+# Solves Ax = b iteratively using the Jacobi Method
+# m is the maximum number of iterations: default m = 25
+# p is the p value of the matrix norm
+# tol is the stopping tolerance (using the relative residual norm on the backward error)
+jacobi = function(A,b,m=25,x = rep(0,n),p=2,tol=0.5*10^(-6),history=FALSE) {
+  n = length(b)
+  if (history) {
+    hist = matrix(NA,nrow=length(b),ncol=(m+1))
+    hist[,1] = x
+  }
+  d = diag(A)
+  R = A
+  R[cbind((1:n),(1:n))] = 0  # allows for r to be sparse  
+  steps=0
+  for (j in 1:m) {
+    x = (b - R %*% x)/d 
+    steps = steps+1
+    if (history) {hist[,(j+1)] = as.matrix(x)}
+    if (vnorm(b-A%*%x,p) <= vnorm(b,p)*tol) break 
+  }
+  if (history) return(list(x=x,iterations=steps,history = hist[,1:(steps+1)]))
+  else return(list(x=x,steps=steps))
+}
+
+```
+
+```{r}
+katz = function(A, alpha) {
+  N = nrow(A)
+  B = (1/alpha)*diag(N)-t(A)
+  ones = rep(1, N)
+  d = t(A) %*% ones
+  res = jacobi(B, d, x=ones, history=TRUE)
+  normRes = res$x/max(res$x)
+  return(list(x=res$x, norm=normRes, history=res$history))
+}
+```
+
+
+```{r}
+N = 14
+A = spMatrix(nrow = N, ncol = N)
+
+A[2:7, 1] = 1
+A[1, 2] <-A[6:7, 2] <- A[14,2] <- 1
+A[2,3] <- A[4:5, 3] <- 1
+A[5,4] <- A[8:10, 4] <- 1
+A[4, 5] <- A[11:13, 5] <- 1
+A[7, 6] <- A[14,6] <- 1
+A[6, 7] <- A[14, 7] <- 1
+A[10, 9] <- A[10, 8] <- 1
+A
+
+ev = eigen(A)
+ev$values
+
+alpha = 0.5  #Want the abs(lambda / alpha <= 1)
+
+#This implies that largest alpha = reciprical of the eigenvalue
+#To converge need lambda/alpha <= 1
+
+ev = eigen(alpha * A)
+ev$values
+
+B = (1/alpha)*diag(N)-t(A)
+B
+ones = rep(1, N)
+d = t(A) %*% ones
+
+res = jacobi(B, d, x=ones)
+res$x
+
+normRes = res$x/max(res$x)
+normRes
+```
+
+```{r}
+katRes = katz(A, alpha)
+katRes$norm
+katRes$history
+```
+
+
+## Part 2
+
+They have also provided the Wikipedia data for the top 990 visited sites on Wikipedia.  They would like to see it work on this before setting you loose on the entire Wikipedia site.  You should perform the analysis on this data for various (convergent) values of the attenuation factor.
+
+- [Here](https://drive.google.com/file/d/18SDnDjsscA4qkD3pKfTexY7EJxfb7t1T/view?usp=sharing) is the Wikipedia top 990 data set
+- Here is some R code, [WikiMatrixSetUp.r](https://drive.google.com/file/d/1VZUHeCaltM3vmFcRb59W5dN0NXzhxJlc/view?usp=sharing), written by the aforementioned intern, to set up the adjacency matrix for these 990 sites.  It also includes useful functions that convert between the Wiki site index number and the matrix index. The Analytics team would like an explanation of what is going on in these commands.
+- A list of [names](https://drive.google.com/file/d/1iJziKZkOwrZFuDvqISy445OZzbpuX3o9/view?usp=sharing) of the top 990 sites with their site numbers
+
+
+```{r}
+# NOTE: you will need to get the right path name to your copy of this file
+W = read.csv("/Users/Lawson/Documents/MATH_365/TR/TR2/links.csv")
+print(head(W))
+from=W$from #Makes from column in R
+to=W$to #Makes to column in R
+sites = sort(union(unique(to),unique(from))) #Makes a list of unique sites using the from and to columns
+n=length(sites)
+
+
+# The following functions convert between the site labels and the matrix index
+SiteToIndex = function(s) {match(s,sites)} #Gets the index corresponding to a site
+IndexToSite = function(s) {sites[s]} #Gets a site corresponding to an index
+
+ii = rep(0,length(to)) #Vector corresponding to to
+jj = rep(0,length(from)) #Vector corresponding to from
+for (i in 1:length(from)) ii[i] = SiteToIndex(from[i]) #Iterate over rows and fill if from[i] is has a corresponding value
+for (i in 1:length(to)) jj[i] = SiteToIndex(to[i]) #Iterate over the columns and fill if to[i] has a 1 value
+xx = rep(1,length(jj)) #Make x vector of that is the size of the columns of ones
+#library("Matrix")
+A = spMatrix(nrow=n,ncol=n,i=ii,j=jj,x=xx)
+
+
+pageNames = read.csv("/Users/Lawson/Documents/MATH_365/TR/TR2/titles-sorted-pruned.csv", header = FALSE)
+names = pageNames$V2
+```
+
+
+
+```{r}
+ev = eigen(A)
+val = ev$values
+max(Re(val)) #Max eigenvalue is 418.
+N = nrow(A)
+#ev$values
+
+alpha = 0.002  #Want the abs(lambda / alpha <= 1)
+
+#This implies that largest alpha = reciprical of the eigenvalue
+#To converge need lambda/alpha <= 1
+
+B = (1/alpha)*diag(N)-t(A)
+ones = rep(1, N)
+d = t(A) %*% ones
+
+res = jacobi(B, d, x=ones)
+#res$x
+
+normRes = res$x/max(res$x)
+normRes = as.matrix(normRes)
+```
+
+
+
+```{r}
+sortedNormRes = sort(normRes, decreasing=TRUE, method="radix", index.return = TRUE)
+#sortedNormRes$ix
+
+topTen = sortedNormRes$ix[0:10]
+topTen
+topTenNames = pageNames$V2[topTen[0:10]]
+topTenNames
+```
+
+
+
+```{r}
+wikiKatz = katz(A, alpha)
+wikiNorm = as.matrix(wikiKatz$norm)
+sortedWikiKatz = sort(wikiNorm, decreasing=TRUE, method="radix", index.return = TRUE)
+topTen = sortedWikiKatz$ix[0:10]
+topTenNames = pageNames$V2[topTen[0:10]]
+print(topTenNames)
+```
+
+
+## The Technical Report
+
+Your report should be no more than 5 pages; however, if you wish, you may include R code in an appendix that does not count against the page limit. Please upload a pdf to Moodle and bring a hard copy to class on the due date.
+
+## Grading
+
+The report will be graded according to a rubric similar to TR1 and will again be worth 25 points. Here is how the points will be divided:
+
+- 2 points simply for using LaTeX.  Thus if you use something else, you can get a maximum of 23 points
+- 5 points for your overall writing. Complete sentences, good punctuation, clear concise exposition, good organization
+- 9 points for Part 1
+- 9 Points for Part 2
+- In addition to the tasks laid out in the assignment for each of these parts (examining Jacobi iterations, determining convergent values of alpha, etc.), you should make effective use of examples and graphics
+
+## Alternate TR2
+
+If you believe this is not the most interesting or profitable project for your company to invest time exploring, you are free to explore any real world application of iterative methods for solving linear systems of equations (e.g., Jacobi, conjugate gradient). Just make sure to address similar issues as mentioned above (i.e., illustrative examples, factors affecting convergence, intuitive explanations). The point of the report is not to explain an iterative method in a vacuum, but rather to investigate an iterative method in the context of an actual (preferably scalable) application.

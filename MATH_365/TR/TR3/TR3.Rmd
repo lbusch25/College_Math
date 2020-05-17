@@ -1,0 +1,106 @@
+---
+title: "TR3"
+author: "Lawson Busch"
+date: "4/15/2018"
+output: html_document
+---
+
+```{r}
+source("https://drive.google.com/uc?export=download&id=10dNH3VbvxS8Z3OHjP4i9gRbtsf91VVBb")
+require(manipulate)
+```
+
+```{r}
+draw1.beziers = function(x1, x2, x3, x4, y1, y2, y3, y4, npts = 10,new = TRUE, ...) {
+  allx = c(x1, x2, x3, x4)
+  ally = c(y1, y2, y3, y4)
+  xlim = c(min(allx), max(allx))
+  ylim = c(min(ally), max(ally))
+  if (new) 
+    par(pty="s")
+    plot(-1:2, xlim = xlim, ylim = ylim,...,col='white')
+  xpts = c()
+  ypts = c()
+  for (k in 1:length(x1)) {
+    pts = draw1.one.bezier(x1[k], x2[k], x3[k], x4[k], y1[k], 
+                          y2[k], y3[k], y4[k], npts=npts,new = FALSE, xlim = xlim, ylim = ylim, 
+                          ...)
+    xpts = c(xpts, pts$x)
+    ypts = c(ypts, pts$y)
+  }
+  invisible(list(x = xpts, y = ypts))
+}
+```
+
+```{r}
+draw1.one.bezier = function(x1, x2, x3, x4, y1, y2, y3, y4, npts = 10,new = TRUE, ...) {
+  pts = one.bezier(x1, x2, x3, x4, y1, y2, y3, y4, npts = npts)
+  if (new) 
+    plot(pts, type = "n", 
+         xlim = c(min(pts$x, x1, x2, x3, x4),max(pts$x, x1, x2, x3, x4)), 
+         ylim = c(min(pts$y, y1, y2, y3, y4),max(pts$y, y1, y2, y3, y4)),...)
+  lines(pts, ...)
+  #points(c(x1, x4), c(y1, y4), pch = 20, ...)
+  #points(c(x2, x3), c(y2, y3), pch = 10, ...)
+  #lines(c(x1, x2), c(y1, y2), lty = 3)
+  #lines(c(x4, x3), c(y4, y3), lty = 3)
+  invisible(pts)
+}
+```
+
+```{r}
+one.bezier = function(x1, x2, x3, x4, y1, y2, y3, y4, npts = 10) {
+  bx = 3 * (x2 - x1)
+  cx = 3 * (x3 - x2) - bx
+  dx = x4 - x1 - bx - cx
+  by = 3 * (y2 - y1)
+  cy = 3 * (y3 - y2) - by
+  dy = y4 - y1 - by - cy
+  t = seq(0, 1, length = npts)
+  x = x1 + t * (bx + t * (cx + dx * t))
+  y = y1 + t * (by + t * (cy + dy * t))
+  return(list(x = x, y = y))
+}
+```
+
+
+
+```{r}
+#Start Point
+x1 = c(1, 1, 1, 1.25, 1.5, 4.2)
+y1 = c(8, 1, 8, 8, 2, 2.6)
+
+#First control point
+x2 = c(1.5, 2, 1.2, 1.8, 2, 4.1)
+y2 = c(6, 2, 7.5, 6, 2.5, 2.6)
+
+#Second control point
+x3 = c(1.5, 3, 1.4, 1.6, 3, 3.9)
+y3 = c(2, 2.25, 7.5, 2, 3, 2.4)
+
+#End point
+x4 = c(1, 4, 1.25, 1.5, 4.2, 4)
+y4 = c(1, 2, 8, 2, 2.6, 2)
+
+draw1.beziers(x1, x2, x3, x4, y1, y2, y3, y4, npts=20)
+```
+
+```{r}
+#Start Point
+x1 = c(1.55, 1, 1.8, 1.5, 4.2, 0.5, 0.5, 1.8, 1.82) #2.1
+y1 = c(9, 1, 8.8, 2, 2.6, 8.5, 8.5, 8.8, 8) #8.8
+
+#First control point
+x2 = c(1.6, 2, 1.9, 2, 4.1, 0.75, 0.75, 1.9, 2.4, 2.4)
+y2 = c(6, 2, 6, 2.5, 2.6, 8.75, 8.75, 9.2, 8.8, 8.8)
+
+#Second control point
+x3 = c(1.6, 3, 1.7, 3, 3.9, 1.25, 1.25, 2.2, 2.1)
+y3 = c(2, 2.25, 2, 3, 2.4, 8.25, 8.6, 8.3, 9.3)
+
+#End point
+x4 = c(1, 4, 1.5, 4.2, 4, 1.55, 1.55, 1.8, 1.55) #2.1
+y4 = c(1, 2, 2, 2.6, 2, 8, 8.5, 8.5, 9) #8.8
+
+draw1.beziers(x1, x2, x3, x4, y1, y2, y3, y4, npts=20)
+```

@@ -1,0 +1,204 @@
+---
+title: "Team Project"
+author: "Lawson Busch, Raven McKnight, Ximena Silva-Aviela"
+date: "9/30/2018"
+output: html_document
+---
+
+## Part 1: First Impressions
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(ggmap)
+library(fivethirtyeight)
+library(reshape2)
+data(hate_crimes)
+?hate_crimes
+
+hate_crimes <- data.frame(hate_crimes)
+```
+
+### Ximena's Plots
+
+```{r}
+ggplot(data = hate_crimes, aes(y = share_vote_trump, x = gini_index, label = state)) + geom_point() +  geom_text(aes(label=state),hjust=0, vjust=0)
+
+ggplot(data = hate_crimes, aes(x = share_white_poverty, y = share_vote_trump, label = state)) + geom_point() + geom_text(aes(label= state), hjust = 0, vjust = 0)
+
+ggplot(data = hate_crimes, aes(y = share_vote_trump, x = avg_hatecrimes_per_100k_fbi, label = state)) + geom_point() + geom_text(aes(label = state), hjust = 0, vjust = 0)
+
+ggplot(data= hate_crimes, aes(y = share_vote_trump, x = share_pop_metro, label = state)) + geom_point() + geom_text(aes(label = state))
+```
+
+
+
+
+```{r}
+hate_crimes_no_state <- hate_crimes %>%
+  select(-state) %>%
+  na.omit(hate_crimes)
+
+# Correlation matrix
+cor_matrix <- round(cor(hate_crimes_no_state), 2)
+cor_melt <- melt(cor_matrix)
+
+# Visualizing the ABSOLUTE correlation
+ggplot(cor_melt, aes(x=Var1, y=Var2, fill=abs(value))) + 
+    geom_tile() + 
+    theme(axis.text.x = element_text(angle = 60, hjust = 1))
+```
+
+
+```{r}
+library(choroplethr)
+hate_crimes_splc <- hate_crimes %>%
+  mutate(value = hate_crimes_per_100k_splc, region = tolower(state))
+
+hate_crimes_splc[is.na(hate_crimes_splc)] = as.numeric(0)
+
+state_choropleth(hate_crimes_splc)
+```
+
+```{r}
+hate_crimes_fbi <- hate_crimes %>%
+  mutate(value = avg_hatecrimes_per_100k_fbi, region = tolower(state))
+
+hate_crimes_fbi[is.na(hate_crimes_fbi)] = as.numeric(0)
+
+state_choropleth(hate_crimes_fbi)
+```
+
+```{r}
+df <- data.frame(data(df_pop_state))
+```
+
+## Part 2: Build and Evaluate a Model
+
+### Back Summary
+
+```{r}
+# Load the leaps package
+library(leaps)
+
+dim(hate_crimes_no_state)
+
+# Do backward stepwise selection
+# nvmax=13 indicates that we want results for all models from size 1 to 13 (all possible  predictors)
+back_step <- regsubsets(hate_crimes_per_100k_splc ~ ., hate_crimes_no_state, method = "backward", nvmax = 10)
+
+# Store the summary information
+back_summary <- summary(back_step)
+back_summary
+```
+
+A plot of the adjusted $R^2$ values for the backward stepwise selection models.
+```{r}
+plot_data <- data.frame(size = 1:10, adjr2 = back_summary$adjr2)
+ggplot(plot_data, aes(x = size, y = adjr2)) + 
+    geom_point() + 
+    geom_line() + 
+    labs(x="subset size", y="Adjusted R-squared")
+```
+
+```{r}
+coef(back_step, 4)
+```
+
+### Best Subsets
+
+```{r}
+# Perform best subsets
+best_subsets <- regsubsets(hate_crimes_per_100k_splc ~ ., hate_crimes_no_state, nvmax = 10)
+
+# Store the summary information
+best_summary <- summary(best_subsets)
+best_summary
+```
+
+```{r}
+plot_data <- data.frame(size = 1:10, adjr2 = best_summary$adjr2)
+ggplot(plot_data, aes(x = size, y = adjr2)) + 
+    geom_point() + 
+    geom_line() + 
+    labs(x="subset size", y="Adjusted R-squared")
+```
+
+```{r}
+coef(best_subsets, 5)
+```
+
+### LASSO
+
+```{r}
+set.seed(2018)
+library(glmnet)
+
+# First process the data!  
+x <- model.matrix(hate_crimes_per_100k_splc ~ ., hate_crimes_no_state)[,-1]
+y <- hate_crimes_no_state$hate_crimes_per_100k_splc
+
+# Fit the LASSO for a grid of lambda
+lasso_mod <- glmnet(x, y, alpha = 1)
+
+# Plot a summary of these models
+plot(lasso_mod, xvar = "lambda", label = TRUE)
+```
+
+```{r}
+set.seed(2018)
+
+# Calculate the CV error rate for the LASSOs at each lambda
+lasso_cv <- cv.glmnet(x, y, alpha = 1)
+
+# Plot the CV results
+plot(lasso_cv)
+```
+
+```{r}
+lambda_best <- lasso_cv$lambda.min
+lambda_best
+log(lambda_best)
+```
+
+```{r}
+# Grab the coefficients for the LASSO using this lambda
+lasso_coef <- predict(lasso_mod, type = "coefficients", s = lambda_best)
+lasso_coef
+```
+
+### Model
+
+```{r}
+final_mod <- lm(hate_crimes_per_100k_splc ~ avg_hatecrimes_per_100k_fbi + share_vote_trump +
+                  share_non_citizen, data = hate_crimes_no_state)
+summary(final_mod)
+```
+
+
+## Part 3: Final Impressions
+      
+
+```{r}
+MN_TN_AZ <- hate_crimes %>%
+  filter(state == "Arizona" | state == "Tennessee" | state == "Minnesota") %>%
+  mutate(pre_hate_100k = avg_hatecrimes_per_100k_fbi, post_hate_100k = hate_crimes_per_100k_splc) %>%
+  select(state, share_non_citizen, share_vote_trump, pre_hate_100k, post_hate_100k)
+
+head(MN_TN_AZ)
+```
+
+
+Bullet talking points:
+
+1. Our results do not agree with those in the five thirty eight article, but that is because they are answering a different question
+  1a) they are looking at what predicts hate crimes, using before and after election rates as different data sets
+  1b) We are looking at predicting hate crimes after the 2016 elections, which means that we use hate crime rates before the election as a predictor value
+  
+2. Looking at the three examples above, we can see
+    2a) States with higher pre_hate rate also had a higher post_hate rate
+    2b) States with a lower share non citizen had lower post_rate
+    2c) States with a lower share_vote_trump had a lower post_hate rate
+    
+3 (or possibly 1c). We feel that it is important to note that these data sets (both the FBI and the SPLC) are inherently biased, because they are both self reported. Thus, the increase in hate crime rates post election could simply be a result of increased awareness towards hate crimes, and thus more reported hate crimes. It is also important to note that the pre election data set only includes hate crimes, while the post election data set includes both hate crimes and hate incidents, which could account for more incidents being reported.
+  The self reported data could also explain some of our unexpected findings. For example, it is possible that areas with less share_vote_trump are more aware of hate crimes/incidents, and thus more likely to report them than states with higher share_vote_trump.

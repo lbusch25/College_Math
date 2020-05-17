@@ -1,0 +1,346 @@
+# Computational Linear Algebra
+# Exam #1 Computational Portion
+
+
+## Instructions:
+
+* This portion of the exam should be added to the back of the written part and the essay, and you should submit a single, stapled copy.
+* You must also submit this file in Moodle.
+* Please fill in your name in the appropriate place below.
+* Please leave intact the leading blocks which load the Matrix package and set the number of digits for display of numbers.
+* Please read carefully the instructions for each problem. 
+* Please preserve all of the section headings for soutions, and insert your solutions in the appropriate places.
+* You are certainly allowed to pull code from things we've used/developed in this course (e.g., any code I gave you as part of in-class activities).
+
+
+## Lawson Busch
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(options(digits=8))
+```
+
+```{r,message=FALSE}
+require(Matrix)
+```
+
+### Problem 7
+
+In this problem, we are going to use sparse matrices to represent chemical graphs of organic molecules, and then use eigenvalues to analyze where two molecules might bridge (connect). 
+
+
+
+Figure 1(a) shows the voltage graph for a single fulvene molecule. The graphs for two individual molecules can be bridged by adding one or more edges  connecting a vertex from each graph. As an example, in Figure 1(b), we consider adding two new edges (shown in blue), each connecting vertices from each of the initial graphs. The resulting weighted, undirected graph in Figure 1(b) features 12 vertices, labeled 1 through 12. The edges of the graph connecting vertices on the same organic molecule retain their initial edge weights. The two new connecting edges have weights of $a$ (connecting vertices 6 and 8) and $2-a$ (connecting vertices 2 and 8), where $a$ is some number between 0 and 2. The weighted adjacency matrix $W$ for this bridged graph is a $12 \times 12$ matrix, with the $(i,j)^{th}$ entry $W_{ij}$ equal to 0 if there is no edge connecting vertices $i$ and $j$, and equal to the weight of the edge connecting vertices $i$ and $j$ otherwise.
+
+### Part (A): 2 points
+Let $a=1$. Create the sparse matrix $W$. Run the command `image(W)` to make sure your $W$ has the correct sparsity (nonzero) pattern. 
+
+### Part (A) solution
+
+```{r}
+# Your code here
+# UNCOMMENT NEXT LINE ONCE YOU CALCULATE W
+N = 12
+W = spMatrix(nrow = N, ncol = N) #Initialize W as a sparse matrix
+
+#Set edges that are equal to 1
+W[1,2] <- W[2,1] <- W[3,4] <- W[4,3] <- W[5,4] <- W[4,5] <- W[6,8] <- W[8,6] <- W[2,8] <- W[8,2] <- W[8,7] <- W[7,8] <- W[9,10] <- W[10,9] <- W[11,10] <- W[10,11] <- 1
+
+#Set edges that are equal to 2
+W[1,5] <- W[5,1] <- W[2,3] <- W[3,2] <- W[4,6] <- W[6,4] <- W[8,9] <- W[9,8] <- W[7,11] <- W[11,7] <- W[10,12] <- W[12,10] <- 2
+image(W)
+```
+
+### Part (B): 6 points
+
+The weighted adjacency matrix $W$ has both negative and positive eigenvalues. The spectral gap of $W$ is the difference between the negative eigenvalue closest to 0 and the positive eigenvalue closest to 0. For example, when $a=1$, the negative eigenvalue closest to 0 is -0.755, and the positive eigenvalue closest to 0 is 1.344. So the spectral gap is 2.099.
+
+We are going to let $a$ vary, and see how it affects the spectral gap. Create a function \texttt{sg(a)} that takes  as input a choice of $a$ between 0 and 2, and returns the spectral gap of the graph shown above in Figure 1(b), for the given value of $a$. Plot the function \texttt{sg($\cdot)$} on the interval $[0,2]$.
+
+### Part (B) solution
+
+```{r}
+# Your code here
+sg = function(a) {
+  #Makes sure a is in valid input range
+  if(a > 2 | a < 0) {
+    return(NULL)
+  }
+  
+  #Decided to update existing W instead of make a new W every time as it is more space efficient
+  W[2,8] <- W[8,2] <- (2-a) #Update weights of W using new A value
+  W[6,8] <- W[8,6] <- a
+  v = eigen(W, only.values = TRUE)
+  val = v$values
+  neg = 0
+  pos = 0
+  for(i in 1:nrow(W)) {
+    if(val[i] < 0) { #Find largest negative eigenvalue
+      if(neg == 0) { #Check if first value has been set
+        neg = val[i]
+      } else {
+        if(val[i] > neg) { #Check if closest to zero
+          neg = val[i]
+        }
+      }
+    } else if(val[i] > 0) { #Find smallest positive eigenvalue
+      if(pos == 0) { #Check if first value has been set
+        pos = val[i]
+      } else {
+        if(val[i] < pos) { #Check if closest to 0
+          pos = val[i]
+        }
+      }
+    }
+  }
+  
+  return(pos-neg)
+}
+# Your plot command here
+a1 = seq(0, 2, length = 1000)
+aY = rep(0, 1000)
+for(i in 1:length(a1)) {
+  aY[i] = sg(a1[i]) #Calculates all of our Y values for each ai
+}
+sg(1) #gives the expected result 
+plot(a1, aY, type='l')
+```
+
+### Part (C): 8 points
+
+Now we want to determine for which value of $a$ the spectral gap of the graph shown in Figure 1(b) is maximized. First, use the finite difference derivative function $D$ from Technical Report 1 (you can use yours or mine, which is called `FDDeriv`) to generate a function $g$ that is the numerical derivative of the `sg` function. Plot the function $g(\cdot)$ on the interval $[0,2]$. Then use your favorite root-finding method to find the value of $a$ on the interval $[0,2]$ that maximizes the spectral gap of $W$. For your answer to this question, include a single code block with all of your code. On the last line, execute the command `paste("Root =",as.character(root))` where root is a variable containing your approximation of the root.
+
+
+### Part (C) Solution
+
+#NEED TO COME BACK AND FIX THE PLOTTING FOR G
+#Getting weird numeric 0 answers for end of each range
+#Also need to fix bisect method portion of the code
+
+```{r}
+# Your code here
+# UNCOMMENT NEXT LINE ONCE YOU CALCULATE THE ROOT
+FDDeriv = function(f,delta=.000001){ 
+  function(x){(f(x+delta) - f(x-delta))/(2*delta)}
+}
+
+
+g = FDDeriv(sg)
+
+gY = rep(0, 1000)
+for(i in 3:length(a1)-1) { #I am using 3:(length(a1)-1) because for some reason R was converting my largest (2) and two smallest (0, 0+delta) values into numeric(0) values when the derivative function ran on them, causing an error since that cannot be an assigned value in a vector
+  gY[i] = g(a1[i])
+}
+plot(a1[3:length(a1)-1], gY[3:length(a1)-1], type = 'l')
+
+# a shorter version of bisect that just returns the root
+bisect.short = function(f,interval,tol=0.5*10^-10,verbose=FALSE){
+  a = interval[1]
+  b = interval[2]
+  fa = f(a)
+  fb = f(b)
+  j = 0                                # counter for verbose printing
+  if (sign(fa)*sign(fb) >= 0 ) 
+    stop("f(a)f(b)<0 not satisfied")
+  while ((b-a)/2 > tol) {
+    c = (a + b)/2
+    fc = f(c)
+    j = j+1
+    if (verbose==TRUE) {               # show values at each step
+      print(j) 
+      print(c(a,c,b,b-a))
+    }
+    if (fc == 0)  break
+    if (sign(fc)*sign(fa) < 0) {
+      b = c
+      fb = fc
+    }
+    else {
+      a = c
+      fa = fc
+    }
+  }
+  return((a+b)/2) 
+}
+
+root = bisect.short(g, c(a1[3],a1[length(a1)-1])) #Still using the above slightly modified range to avoid errors at the edges, does not affect the overall computations
+
+paste("Root =",as.character(root))  
+```
+
+### Problem 8: 20 points
+
+Brownian motion is a simple continuous stochastic process that is widely used in physics and finance for modeling random behavior that evolves over time. Quantitative Finance uses a version called "Geometric Brownian Motion" (GBM) to predict pricing options. The general model we use to determine the future behavior of an asset is: $S_t = S_0 + e^{(\mu - \frac{\sigma ^2}{2}) t + \sigma W_t}$, where $S_t$ is the price at time t, $S_0$ is the initial price, $\mu$ is the expected return, and $\sigma$ is the standard deviation of the return.
+
+The R implementation of the solution is shown below (no changes need to be made to this code, but look it over carefully to see what it does.):
+
+```{r}
+GBM <- function(N, sigma, mu, S0, Wt = NULL) {
+  # Creates a single asset path of daily prices using Geometric Brownian Motion. 
+  # One year is 252 days since that is about how many trading days are in any
+  # given year.
+  #
+  # Inputs:
+  #   N: Number of days in the path.
+  #   sigma: Standard deviation of daily continuously compounded 
+  #          returns (known as volatility).
+  #   mu: Average daily continuously compounded returns (known as drift). 
+  #   S0: The initial price of the asset. 
+  #   Wt: The cumulative Brownian motion of the model. This can be supplied or 
+  #       left as NULL. In the case that it is NULL, a vector will be provided.
+  #       If you include this argument, it must be a vector of length N of the 
+  #       cumulative sum of a random variable to work properly. (Steps i.-iii. below    
+  #       create this.) 
+  #
+  # Returns:
+  #   A vector of length N containing the asset prices generated by the specified
+  #   GBM. 
+  if (is.null(Wt)) {
+    Wt <- cumsum(rnorm(N, 0, 1))
+  }
+  t <- (1:N)/252
+  p1 <- (mu - 0.5*(sigma*sigma)) * t
+  p2 <- sigma * Wt
+  St = S0 * exp(p1 + p2)
+  return(St)
+}
+```
+
+### Part (A): 6 points
+
+We are going to simulate the prices of several correlated assets over time, using Correlated GBM. Imagine we have assets that are dependent on each other. Our goal is to predict future asset values taking into consideration correlation of past asset values. The simulation process starts with an $n \times n$ correlation matrix $C$, which shows the correlation between $n$ stocks. The following is the procedure for generating correlated random variables:
+
+i. Perform Cholesky Decomposition of correlation matrix $C$ to obtain upper triangular matrix $R$.
+ii. Generate a random matrix $X$ with $n$ columns following a standard normal distribution with mean = 0 and variance = 1.
+iii. Obtain a correlated random matrix $Wt = XR$. This generates a matrix that encodes both randomness and correlation within the problem.
+iv. Use the above `GBM` function to generate the daily price path for each asset.
+
+Implement the algorithm described above. Below is a starter of the function:
+
+### Part (A) Solution
+
+```{r}
+CorrelatedGBM <- function(N, S0, mu, sigma, cor.mat) {
+  # Creates a matrix of correlated daily price paths using Geometric 
+  # Brownian Motion. 
+  #
+  # Inputs: 
+  #   N: Number of days in the path.
+  #   mu: A vector of drift or average daily continuously compounded returns.  
+  #   sigma: A vector of volatility or standard deviation of daily continuously   compounded returns. 
+  #   S0: A vector of initial prices of the assets. 
+  #   cor.mat: The correlation matrix of the daily continuously compounded 
+  #            returns. 
+  #
+  # Returns:
+  #   A matrix of simulated daily price paths of length N having the same number
+  #   of assets as in the mu and sigma vectors. Note that mu and sigma must have
+  #   the same dimensions. 
+  
+  GBMs <- matrix(nrow = N, ncol = length(mu)) # Generate empty GBM vector for return
+  
+  # Fill in code below for Step i.
+  
+  R = chol(cor.mat)
+	
+  # Step ii. (done for you):
+  X <- matrix(rnorm(N * length(mu), 0, 1), ncol = length(mu)) # Generate the Nxn random matrix
+  X <- apply(X, 2, cumsum) # cumulate value from random matrix to reflect compounded return.
+  
+  # Fill in code below for Step iii.
+  
+  Wt = X%*%R #The %*% specifies matrix multiplication
+  
+  # Fill in code below for Step iv. and store it in GBMs:
+  
+  #I think I need to adjust this to feed each column of Wt and fill GBM that way (by column)
+  GBMs = GBM(N, sigma, mu, S0, Wt)
+  
+  return(GBMs)
+}
+```
+
+
+### Part (B): 10 points
+
+Delta, United, and American Airlines are the three biggest airlines in the U.S. airlines market. They are top choices for investors who love aviation. The dataset `AirlineStockPrices.csv` records the stock price for these three stocks starting from July 1, 2007. In order to simulate the stock prices, we need to determine the inputs for the function `CorrelatedGBM`. Here are the steps you can follow to generate every piece of information you'll need:
+
+i. Generate a return matrix by calculating the daily log return. For example, $r_{i,j} = log(\frac{S_{i+1,j}}{S_i,j})$ where $r_{i,j}$ denotes the return while $S_{i,j}$ denotes the price for stock $j$ in the $i^{th}$ day.
+ii. Use the `cor()` function to calculate the correlation matrix $cor.mat$ on the return matrix.
+iii. Calculate the column mean of the return matrix to create the vector of average returns $mu$. 
+iv. Calculate the standard deviation of each column of the return matrix to create the vector of standard deviations $sigma$. (HINT: `sd()` is a function that computes standard deviation. You may find the function `apply()` useful, but it is not required to use it).
+v. Generate the vector that represents the current price value $S0$ (that is, the last price available).
+
+### Problem (B) solution
+
+```{r}
+# Your code here
+airlineData <- read.csv(file="/Users/Lawson/Documents/MATH_365/Exams/Exam1/AirlineStockPrices.csv", header = TRUE, sep = ",")
+
+arows = nrow(airlineData)
+acols = ncol(airlineData)
+ret.mat = matrix(0,nrow = (arows - 1), ncol = acols) #Want to avoid last row for part one calculation
+
+#Part One
+for(i in 1:(arows-1)) {
+  for(j in 1:3) {
+    ret.mat[i, j] = log(airlineData[i+1,j]/airlineData[i,j])
+  }
+}
+
+# Part Two
+cor.mat = cor(ret.mat)
+
+#Part 3 
+mean1 = mean(ret.mat[,1])
+mean2 = mean(ret.mat[,2])
+mean3 = mean(ret.mat[,3])
+mu = c(mean1, mean2, mean3)
+
+#Part 4
+sd1 = sd(ret.mat[,1])
+sd2 = sd(ret.mat[,2])
+sd3 = sd(ret.mat[,3])
+sigma = c(sd1, sd2, sd3)
+
+#Part 5
+s1 = airlineData[arows,1]
+s2 = airlineData[arows,2]
+s3 = airlineData[arows,3]
+S0 = c(s1, s2, s3)
+```
+
+### Problem (C): 2 points
+
+We would like to simulate the price of these stocks over the next 3 years (remember there are only 252 trading days in a year). Use the `CorrelatedGBM` function to construct the three paths of these stock prices. Plot the path of these stocks over 3 years using the code below:
+
+
+
+### Problem (C) solution
+```{r}
+##UNCOMMENT CODE BELOW ONCE ALL VARIABLES FROM PREVIOUS PROBLEM ARE DEFINED
+
+N = 252*3 #Number of days in the stock trade year
+
+# make correlated asset paths
+set.seed(123) # include this so everyone has the same random initialization
+paths <- CorrelatedGBM(N, S0 , mu, sigma, cor.mat)
+
+# make a basic r plot
+colors <- c('darkblue', 'darkgreen', 'darkgoldenrod')
+t <- (1:N)/252
+plot(t, paths[,1], type = 'l', ylim = c(0, max(paths)), xlab = "Year",
+     ylab = "Price", main = "Simulated Asset Prices", col = colors[1])
+
+for (i in 2:ncol(paths)) {
+  lines(t, paths[, i], col = colors[i])
+}
+legend(x = 0.5, y = 145,c('DAL','UAL','AAL'), lty = c(1,1,1), col = colors, cex = 0.7)
+```
+
+### Problem (D): 2 points
+
+What do you observe about the stock prices? How will you invest based on the simulation?
+
+### Problem (D) Solution
+
+I would invest in American Airlines from the above results and sell it just after two years. If I follow this plan according to the above graph, I should make more than 200 dollars per stock I purchase, an incredable return on invest.

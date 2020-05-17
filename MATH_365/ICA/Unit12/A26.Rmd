@@ -1,0 +1,185 @@
+# Math 365 / Comp 365: Activity 26: Dimension Reduction with the SVD
+
+
+```{r,message=FALSE}
+source("https://drive.google.com/uc?export=download&id=10dNH3VbvxS8Z3OHjP4i9gRbtsf91VVBb") #365functions.R
+```
+
+#### Exercise 1: Best Rank $k$ Approximation
+
+(a) Write a function `SVDApprox` that takes a matrix $A$ and a rank $k$ and returns $A_k$, the best rank-$k$ approximation to $A$. Set the default value of $k$ to be $\frac{1}{2}\min\{m,n\}$.
+
+```{r}
+SVDApprox = function(A, k){
+  out = svd(A)
+  u = out$u
+  v = out$v
+  o = out$d
+  
+  #Ak = o[1:k]*u[,1:k]%*%t(v[,1:k])
+  
+  for(i in 1:k) {
+    if(i == 1) {
+      Ak = o[1]*u[,1]%*%t(v[,1])
+    } else {
+      Ak = Ak + o[i]*u[,i]%*%t(v[,i])
+    }
+  }
+  return(Ak)
+}
+```
+
+
+(b) Here is a 2x2 matrix $A$ and its unit circle mapping:
+```{r}
+A = cbind(c(1, 0), c(2, 2))
+UnitCircleMap(A, p = 2)
+```
+
+Use your `SVDApprox` function to find $A_1$, the best rank-1 approximation of the matrix $A$. Use `UnitCircleMap` to draw the image of the unit circle in $\mathbb{R}^2$ under $A_1$.
+
+(c) Give a geometric interpretation for what $A_1$ is doing. What does $A-A_1$ do?
+
+```{r}
+A_1 = SVDApprox(A, 1)
+A_1
+UnitCircleMap(A_1, p=2)
+```
+
+$A_1$ is the line in two space that correspsonds to the transformation of the largest singular value in $A$. It is a strait line because it does not span $R^2$. $A-A_1$ gives the other vectors in $R^2$ that are not represented by the transformation of $A_1$. 
+
+#### Exercise 2: Image Compression
+
+```{r,message=FALSE}
+library(jpeg)
+```
+
+I know before this beautiful last weekend a lot of us had been feeling crabby about the weather, so we are going to do analysis on the crabby.jpg image. Make sure to dowload and save this in the same folder as your markdown file.
+```{r}
+ColorImg = readJPEG("crabby.jpg")
+dim(ColorImg)
+```
+
+`ColorImg` is a $318 \times 480 \times 3$ data cube. Think about what each entry is recording. Looking at a few images may give you a hint (Carefully look over the code below). The `imPlot` function can plot an image: 
+```{r fig.width=6, fig.height=6}
+
+imPlot = function(img,...) {
+  plot(1:2, type='n',xlab=" ",ylab= " ",...)
+  rasterImage(img, 1.0, 1.0, 2.0, 2.0)
+}
+
+imPlot(ColorImg,main="Crabby")
+
+Red=ColorImg
+Red[,,2]=Red[,,3]=0
+imPlot(Red,main="Red Crabby")
+Green=ColorImg
+Green[,,1]=Green[,,3]=0
+imPlot(Green,main="Green Crabby")
+Blue=ColorImg
+Blue[,,1]=Blue[,,2]=0
+imPlot(Blue,main="Blue Crabby")
+```
+
+Each of the three sheets corresponds to the amount of red, green, and blue values within an image! Let's convert this color image to a grayscale image (How would below change if we were instead to do the analysis on the color image?). Think what the following is doing:
+
+```{r}
+img=0.2989*ColorImg[,,1]+0.5870*ColorImg[,,2]+0.1140*ColorImg[,,3]
+imPlot(img,main="Crabby")
+```
+
+So to store the image, we need to store 152,640 floating point numbers. Our objective in this section is to compress this image using SVD.
+
+(a) Write a function `approxImg` that uses your `SVDApprox` function to do the following:
+
+- Takes an image and a rank $k$ as the two inputs
+
+- Computes the best rank $k$ approximation to the image
+
+- Thresholds the approximation by setting all values below zero back to zero and all values above one back to one
+
+- Plots the approximate image
+
+```{r}
+approxImg = function(image, k) {
+  approx = SVDApprox(image, k)
+  for(i in 1:nrow(approx)) {
+    for(j in 1:ncol(approx)) {
+      if(approx[i, j] > 1) {
+        approx[i, j] = 1
+      }
+      if(approx[i, j] < 0) {
+        approx[i, j] = 0
+      }
+    }
+  }
+  return(approx)
+}
+```
+
+
+(b) Test your `approxImg` function on the Crabby image with $k=5,10,25,50,100$.
+
+```{r}
+k5 = approxImg(img, 5)
+imPlot(k5)
+
+k10 = approxImg(img, 10)
+imPlot(k10)
+
+k25 = approxImg(img, 25)
+imPlot(k25)
+
+k50 = approxImg(img, 50)
+imPlot(k50)
+
+k100 = approxImg(img, 100)
+imPlot(k100)
+```
+
+
+(c) For each approximation level $k$, how many floating point numbers do you need to store? For each $k$, compute the compression ratio, which is the number of floating point numbers needed to store the approximate image divided by the number of floating point numbers needed to store the original image .
+
+
+
+(d) Recall that the optimal approximation error by a rank $k$ matrix (with the error measured by the Frobenius norm) is  $||E_k||_F=||A-A_k||_F=\sum_{i={k+1}}^r \sigma_i^2$. We can use this to define the *relative error* as 
+$$
+\left( \frac{\sum_{i={k+1}}^r \sigma_i^2}{\sum_{i={1}}^r \sigma_i^2} \right)^{\frac{1}{2}}.
+$$
+Note that a higher proportion of energy in the first $k$ singular values leads to a lower relative error. Therefore, matrices $A$ that have a faster decay in the singular values will be easier to approximate by lower rank matrices. 
+Plot the singular values of the Crabby image. Then compute the relative error for $k=5,10,25,50,100$.
+
+(e) One method to decide on the approximation rank is to choose $k$ such that the relative error is below a given threshold (say 31.6%, which corresponds to having 90% of the energy of all $r$ singular values in the first $k$ singular values). For the Crabby image, let's choose the threshold to be 99.5% of energy, so find $k^*$ such that $\sum_{i={1}}^{k^*} \sigma_i^2 \geq 0.995^2*\sum_{i={1}}^r \sigma_i^2$, and plot the best approximation of the image with rank $k^*$. Compute the relative error for $k^*$.
+
+
+
+#### Exercise 3: Dimension Reduction for Clustering
+
+The SVD can be used to take a two-dimensional or three-dimensional snapshot of high-dimensional data, so that dimensionally-challenged human beings can see it. In this problem you will use the top two singular values to project some data down to 2-dimensional space where you can see it.
+
+Here is a data set on cereals:
+```{r,message=FALSE}
+require(foreign)
+```
+```{r}
+cereal = read.dta("http://statistics.ats.ucla.edu/stat/data/cerealnut.dta")
+A =  as.matrix(cereal[,2:9])
+print(A)
+```
+
+To perform this projection, we work with the covariance matrix $C$ of $A$. Compute this as follows:
+
+- For each column of $A$ subtract off the mean of that column. Then each entry is the difference from the mean of that feature
+
+- Now compute the matrix $C = A A^T$.  This is the covariance matrix. It measures how well each of the subjects are correlated. The ij-entry is the dot product of cereal i's data with cereal j's data, so it is (roughly) the cosine of the angle between them 
+
+a) Plot the singular values of the matrix $C$. You should see that there are 2 singular values that stand out from the rest.
+
+b) Use the vectors $x = v_1$ and $y = v_2$ from the SVD as the $x$ and $y$ coordinates of points in the plane. Plot these points.  Label the $i^{th}$ point with the $i^{th}$ brand of cereal. To do this, you can use the following command after your plotting command:
+```
+text(x1, y1, label = cereal$brand)
+```
+
+c) This method should group like cereals next to one another in the plane. Discuss whether you think this is happening.
+
+Note: You could also have used the SVD of $A^{\top}$ instead of the SVD of $C$. Why is this?

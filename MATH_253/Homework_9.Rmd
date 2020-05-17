@@ -1,0 +1,269 @@
+---
+title: "Homework 9"
+author: "Lawson Busch"
+date: "11/15/2018"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+# Data and Libraries
+
+Libraries:
+```{r warning = FALSE, message = FALSE}
+library(openintro)
+library(dplyr)
+library(randomForest)
+library(rpart)
+library(MASS)
+library(ggplot2)
+```
+
+Data:
+```{r}
+set.seed(200)
+
+data("email")
+data("email_test")
+
+# codebooks
+?email
+
+email <- email %>% 
+    mutate(spam = as.factor(spam)) %>% 
+    dplyr::select(-from, -viagra, -sent_email)
+email_test <- email_test %>% 
+    mutate(spam = as.factor(spam)) %>% 
+    dplyr::select(-from, -viagra, -sent_email)
+```
+
+# Excercises
+
+## Excercise 1
+
+### 1a)
+
+```{r}
+dim(email)
+```
+
+```{r}
+dim(email_test)
+```
+
+We have 3,921 training emails and 1,252 testing emails.
+
+### 1b)
+
+We have 17 possible predictors (we have 18 columns, but spam is our class, so we cannont use it as a predictor).
+
+### 1c)
+
+My priority would be increasing specificity for a spam filter. This is because misclassifying a non spam email as spam is a far worse outcome than misclassifying a spam email as non spam. The former could possibly have strong negative effects on someone's life, while the later is just annoying.
+
+## Excercise 2
+
+First I will make a qda model using all possible predictors. 
+
+```{r}
+qda_mod_all <- qda(spam ~ ., data = email)
+qda_mod_all
+
+qda_all_pred <- predict(qda_mod_all, email_test)$class
+true <- email_test$spam
+table(qda_all_pred, true)
+```
+
+To calculate the specificity for this model:
+```{r}
+716 / (716 + 395)
+```
+
+Or the specificity for this model is approximately 0.64, meaning that roughly 64% of non spam emails are correctly classified as not spam.
+
+To calculate the sensitivity for this model:
+
+```{r}
+112 / (112 + 29)
+```
+
+Or the sensitivity for this model is 0.79, meaning that roughly 79% of spam emails are correctly classified as spam.
+
+The overall misclassification rate for this model is:
+
+```{r}
+mis <- (395 + 29) / nrow(email_test)
+mis
+```
+
+Or roughly 34% of the emails in our testing data set were misclassified.
+
+This model has a good sensitivity but a very poor specificity, which is not what we want. Further, the overall misclassification rate is 1/3, which is pretty bad in this situation. To see if I can improve my qda model I will make a second qda model with some predictor selection. I will do this predictor selection by generating a random forest of 100 trees, and using the most important predictors from that forest.
+
+To construct a 100 tree random forest:
+
+```{r}
+forest_R <- randomForest(spam ~ ., email, ntree = 100)
+
+# arranged
+data.frame(names = row.names(forest_R$importance), forest_R$importance) %>% 
+    arrange(desc(MeanDecreaseGini))
+```
+
+This above shows the most important predictors in the forest. I will use the first four predictors as that this the first point where the qda model begins to predict spam emails (not just classify everything as not spam).
+
+```{r}
+qda_mod_1 <- qda(spam ~ num_char + line_breaks + time + number, data = email) #The four most important predictors
+qda_mod_1
+
+qda_1_pred <- predict(qda_mod_1, email_test)$class
+true <- email_test$spam
+table(qda_1_pred, true)
+```
+
+To calculate the specificity for this model:
+```{r}
+994 / (994 + 117)
+```
+
+Or the specificity for this model is approximately 0.89, meaning that roughly 89% of non spam emails are correctly classified as not spam.
+
+To calculate the sensitivity for this model:
+
+```{r}
+49 / (49 + 92)
+```
+
+Or the sensitivity for this model is 0.35, meaning that roughly 35% of spam emails are correctly classified as spam.
+
+The overall misclassification rate for this model is:
+
+```{r}
+mis <- (117 + 92) / nrow(email_test)
+mis
+```
+
+Or roughly 16% of the emails in our testing data set were misclassified.
+
+This pruned model is much better, as the specificity increased to 0.89 from 0.64 and the overall misclassification rate dropped to 16%, which is significantly lower than the prior model's 34% misclassification rate. This does however come at the cost of sensitivity, which drops to 0.35 from 0.79.
+
+However, the model's overall accuracy is still not to my liking, so I decided to investigate. I looked at the predictors in the email data set, and it turns out many of them do not meet the qda assumtions because the predictors are not normally distributed around a mean value. This could explain the qda's model iffy performance. For example, I made a density plot of the num_char variable below, where you can clearly see that data is not normally distributed.
+
+```{r}
+ggplot(email, aes(x=num_char, fill = spam)) + geom_density(alpha=0.5)
+```
+
+In summary, I made two qda models. The first used all predictors, and had a specificity of 0.64, a sensitivity of 0.79, and an overall misclassification rate of 34%. I did not think this was good enough, as the specificity was very low and the misclassification rate was too high. I then did predictor selection using a random forest with 100 trees. This helped, as the specificity increased to 0.89, and the overall misclassification rate dropped to 16%. This came at the consequence of dropped sensitivity, as it decreased to 0.34. This is much better, but still not great so I looked at the predictors, and found that many of them did not meet the assumption of normality, which could explain the poor performance.
+
+## Excercise 3
+
+To begin we will first construct a tree using all possible predictors, and then plot it's cp value (which is its node purity). This will allow me to select the most appropriate cp value, and thus decide how much to prune my tree. 
+
+```{r}
+tree_big <- rpart(spam ~ ., email)
+plotcp(tree_big)
+printcp(tree_big)
+```
+
+From the above, we can see that we should use a cp value of 0.014, as that is the first cp value under one standard error. This cp value will give us the optimally pruned tree, which should have 8 breaks. 
+
+Below is the optimally pruned tree:
+
+```{r}
+tree_prune <- rpart(spam ~., email, cp = 0.014)
+plot(tree_prune, margin = 0.2)
+text(tree_prune, cex = 0.8)
+```
+
+```{r}
+pred_tree_prune <- predict(tree_prune, newdata = email_test, type = "class")    
+true <- email_test$spam
+
+table(pred_tree_prune, true)
+```
+
+To calculate the specificity for this model:
+```{r}
+1108 / (1108 + 3)
+```
+
+Or the specificity for this model is approximately 0.99, meaning that roughly 99% of non spam emails are correctly classified as not spam.
+
+To calculate the sensitivity for this model:
+
+```{r}
+5 / (135 + 5)
+```
+
+Or the sensitivity for this model is 0.035, meaning that roughly 3.5% of spam emails are correctly classified as spam.
+
+The overall misclassification rate for this model is:
+
+```{r}
+mis <- (3 + 136) / nrow(email_test)
+mis
+```
+
+Or roughly 11% of the emails in our testing data set were misclassified.
+
+In summary, I used the cp parameter to prune the tree down to a level where node purity would not improve much with further pruning. I then used the constructed tree to classify all the emails in our test data set. This classification had a specificity of 0.99, a sensitivity of 0.035, and an overall misclassification rate of 11%. However, it should also be noted that almost no emails (only 8) were actually classified as spam using this model. 
+
+## Excercise 4
+
+To construct a random forest of 100 trees using all predictors in R:
+
+```{r}
+# obtain a forest
+forest_all <- randomForest(spam ~ ., email, ntree = 100) 
+
+forest_pred <- predict(forest_all, email_test, type = "class")
+true <- email_test$spam
+table(forest_pred, true)
+```
+
+To calculate the specificity for this model:
+```{r}
+1089 / (1089 + 22)
+```
+
+Or the specificity for this model is approximately 0.98, meaning that roughly 98% of non spam emails are correctly classified as not spam.
+
+To calculate the sensitivity for this model:
+
+```{r}
+69 / (69 + 72)
+```
+
+Or the sensitivity for this model is 0.49, meaning that roughly 49% of spam emails are correctly classified as spam.
+
+The overall misclassification rate for this model is:
+
+```{r}
+mis <- (22 + 72) / nrow(email_test)
+mis
+```
+
+Or roughly 7.5% of the emails in our testing data set were misclassified.
+
+In summary, I made a random forest consisting of 100 trees, and used it to predict the test email data set. This classification had a specificity of 0.98, a sensitivity of 0.49, and an overall misclassification rate of 7.5%. However, it should also be noted that almost no emails (only 8) were actually classified as spam using this model. 
+
+## Excercise 5
+
+### 5a
+
+The qda classification tool performed the worst by far. It had the lowest specificity, at 0.89, (my most important metric) and highest overall misclassification rate at 16%. This is likely due to the predictors in the email data set not meeting the qda assumption of being normally distributed around a mean. 
+
+I would recommend that David Diaz use my random forest model as his classification tool. This is because it has a specificity of 0.98, meaning that roughly 98% of non spam emails are correctly classified as not spam. So very few real emails wind up in the spam filter. It does a pretty good job of identifying spam emails, as the sensitivity is 0.49 meaning that roughly 49% of spam emails are correctly classified as spam. The overall misclassification rate is also low, at 7.5%, and a lot of the misclassification is due to spam being let through, and not real emails being classified as spam, an acceptable outcome. 
+
+### 5b)
+
+The most important predictors to the tree model are:
+
+```{r}
+# arranged
+data.frame(names = row.names(forest_all$importance), forest_all$importance) %>% 
+    arrange(desc(MeanDecreaseGini))
+```
+
+Or we can see that the five most important predictors for my forest model are num_char, line_breaks, time, number, and exlaim_mess.

@@ -1,0 +1,216 @@
+---
+title: "Cross Validation"
+author: "Lawson Busch"
+date: "9/18/2018"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+library(ISLR)
+data(Auto)
+```
+
+```{r}
+# Arrange cars from least to most fuel efficient
+Auto_1 <- Auto %>%
+  arrange(mpg)
+head(Auto_1)
+
+# Arrange 1978 cars from heaviest to lightest
+Auto_78 <- Auto %>%
+  filter(year == 78) %>%
+  arrange(desc(weight))
+
+head(Auto_78)
+```
+
+Select half the data for training:
+
+```{r}
+# There are 392 cars
+dim(Auto)
+## [1] 392   9
+
+# Randomly sample half of these for the training set
+set.seed(2000)
+train_index <- sample(c(1:392), size = 196)
+head(train_index)
+## [1]  78 281 142 153 316 166
+```
+
+```{r}
+# Define the training set
+train_data <- Auto[train_index,]
+train_data
+
+# Define the test set
+test_data <- Auto[-train_index,]
+test_data
+```
+
+```{r}
+dim(train_data)
+## [1] 196   9
+summary(train_data$mpg)
+##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+##   11.00   16.50   22.00   22.93   28.00   44.30
+
+dim(test_data)
+## [1] 196   9
+summary(test_data$mpg)
+##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+##    9.00   17.50   23.00   23.96   30.75   46.60
+```
+
+## Building the model using test data
+
+```{r}
+# Model mpg by horsepower
+model_1_train <- lm(mpg ~ horsepower, train_data)
+summary(model_1_train)
+
+# Calculate the training (in-sample) MSPE
+model_1_train_output <- data.frame(
+    predicted = model_1_train$fitted,
+    residual  = model_1_train$residual)
+
+rss1 = sum(model_1_train_output$residual^2)
+mspe1 = mean(model_1_train$residual^2)
+mspe1
+```
+
+## Check generalization using the test_data
+
+```{r}
+# Use the training model to predict mpg for the test cases
+model_1_test <- predict(model_1_train, newdata = data.frame(horsepower = test_data$horsepower))
+
+# Calculate the test MSPE (MSPE for the test data)
+# HINT: first calculate residuals 
+
+test_observed <- test_data$mpg
+test_residuals <- test_observed - model_1_test
+
+mspe_test = mean(test_residuals^2)
+mspe_test
+```
+
+```{r}
+library(ggplot2)
+ggplot(train_data, aes(y = mpg, x = horsepower)) + 
+    geom_smooth(method = "lm", se = FALSE) + 
+    geom_smooth(data = test_data, aes(y = mpg, x = horsepower), method = "lm", se = FALSE, color = "red")
+```
+
+Note, dividing the data in half makes the sample less powerful (as in it makes the model less accurate).
+
+## Leave one out cross validation (LOOCV)
+
+```{r}
+mspe_total = rep(0, 392)
+for(i in 1:392) {
+  train <- Auto[-i,]
+  test <- Auto[i,]
+  
+  model_train <- lm(mpg ~ horsepower, train)
+  model_test <- predict(model_train, newdata = data.frame(horsepower = test$horsepower))
+  
+  test_observed <- test$mpg
+  test_residuals <- test_observed - model_test
+  
+  mspe_test = mean(test_residuals^2)
+  mspe_total[i] = mspe_test
+}
+
+MSPEs <- data.frame(mspe_total)
+ggplot(MSPEs, aes(x = mspe_total)) + 
+    geom_histogram(color = "white")
+
+loocv = mean(mspe_total)
+loocv
+```
+
+The loocv value is 23.9, which is a fairly low MSPE value, indicating that our model for the auto data is a good model.
+
+```{r}
+# Load the boot package
+library(boot)    
+
+# Note the use of glm, not lm and the use of the full Auto data
+model_1_glm <- glm(mpg ~ horsepower, Auto, family = "gaussian")
+model_1_cv  <- cv.glm(Auto, model_1_glm)
+model_1_cv$delta
+```
+
+### 7
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(infer)
+
+set.seed(2)
+Auto_rep <- Auto %>% 
+    sample_n(size = 20, replace = FALSE) %>% 
+    rep_sample_n(reps = 20, size = 20, replace = FALSE) %>% 
+    group_by(replicate) %>% 
+    arrange(name) %>% 
+    mutate(test = (1:20 == replicate))
+```
+
+```{r}
+# p <- ggplot(Auto_rep[Auto_rep$test == FALSE, ], aes(x = horsepower, y = mpg, frame = replicate)) +
+#     geom_point() +
+#     stat_smooth(method = "lm", aes(group = replicate), se=FALSE) +
+#     geom_point(data = Auto_rep[Auto_rep$test == TRUE, ], aes(x = horsepower, y = mpg, frame = replicate), color = "red", size = 4)
+# gganimate(p)
+```
+
+# Part two
+
+```{r}
+# Load boot
+library(boot)
+```
+
+```{r}
+# R randomly picks the 10 folds
+# Set the seed for reproducibility
+set.seed(2000)
+
+# Fit the model
+model_1_glm   <- glm(mpg ~ horsepower, Auto, family = "gaussian")
+
+# Calculate the 10-fold CV error
+model_1_cv10  <- cv.glm(Auto, model_1_glm, K = 10)
+model_1_cv10$delta
+```
+
+```{r}
+set.seed(2000)
+model_2_glm   <- glm(mpg ~ poly(horsepower,2), Auto, family="gaussian")
+model_2_cv10  <- cv.glm(Auto, model_2_glm, K = 10)
+model_2_cv10$delta
+## [1] 19.32333 19.30543
+
+set.seed(2000)
+model_5_glm   <- glm(mpg ~ poly(horsepower,5), Auto, family="gaussian")
+model_5_cv10  <- cv.glm(Auto, model_5_glm, K = 10)
+model_5_cv10$delta
+## [1] 19.19904 19.15802
+
+set.seed(2000)
+model_19_glm   <- glm(mpg ~ poly(horsepower,19), Auto, family="gaussian")
+model_19_cv10  <- cv.glm(Auto, model_19_glm, K = 10)
+model_19_cv10$delta
+## [1] 36.41754 34.47553
+```
+
+The in sample MSPE error values are lower than the CV MSPE errors. This is expected since the in sample errors uses the entire data set, as opposed to a portion of it.
+
+Model_19 has the best in sample error, which makes sense as it is highly tailored to this specific data set.
+
+The model with the best CV error is model_5, which indicates that it would be the most applicable to new data. 
+
+I would pick model_2, as it has almost an identical CV to model_5 but its much simpler, making it the better choice (easier to read, use).

@@ -1,0 +1,278 @@
+---
+title: "KNN Classification"
+author: "Lawson Busch"
+date: "11/8/2018"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+# Packages and Data
+
+```{r warning = FALSE, message = FALSE}
+library(gridExtra)
+library(ggplot2)
+library(dplyr)
+library(forcats)
+library(FNN)
+
+land <- read.csv("https://www.macalester.edu/~ajohns24/data/land_cover.csv")
+```
+
+
+Exploring and changing data:
+
+```{r}
+table(land$class)
+## 
+##  asphalt  building       car  concrete     grass      pool    shadow  
+##        59       122        36       116       112        29        61 
+##     soil      tree  
+##        34       106
+
+land <- land %>% 
+    filter(class != "shadow ") %>% 
+    mutate(class = droplevels(class)) %>% 
+    mutate(type = fct_collapse(class, 
+        manmade_surface = c("asphalt ","concrete "),
+        manmade_object = c("building ","car ","pool "),
+        natural = c("grass ","soil ","tree ")))
+
+table(land$type)
+## 
+## manmade_surface  manmade_object         natural 
+##             175             187             252
+
+```
+
+Train and Test data sets:
+```{r}
+set.seed(2000)
+sub  <- sample_n(land, size = 120)    
+train_index <- sample(1:120, size = 100)    
+train <- sub[train_index,]
+test  <- sub[-train_index,]
+
+table(train$type)
+## 
+## manmade_surface  manmade_object         natural 
+##              30              31              39
+table(test$type)
+## 
+## manmade_surface  manmade_object         natural 
+##               3               8               9
+```
+
+# Excercises
+
+## Excercise 1
+
+```{r}
+ggplot(train, aes(x = BrdIndx, fill = type)) + 
+    geom_density(alpha = 0.5)
+ggplot(train, aes(x = Assym, fill = type)) + 
+    geom_density(alpha = 0.5)
+ggplot(train, aes(y = Assym, x = BrdIndx, color = type)) +
+    geom_point()
+```
+
+From our density plots, we can see that the assumption of normality does not appear to hold for either Assym or BrdIndex, as their appears to be two humps for each category of object. This demonstrates that these two variables do not have a normal distribution.
+
+## Excercise 2)
+
+For BrdIndx = 3.0 and Assym = 0.5:
+
+K = 1 approximation: BrdIndx = 2.9 and Assym = 0.49.
+
+K = 3 approximation: BrdIndx = 3.0 and Assym = 0.62.
+
+K = 100 approximation: BrdIndx = 2.2 and Assym = 0.55.
+
+For BrdIndx = 1.0 and Assym = 0.75:
+
+K = 1 approximation: BrdIndx = 1.2 and Assym = 0.77.
+
+K = 3 approximation: BrdIndx = 1.2 and Assym = 0.53.
+
+K = 100 approximation: BrdIndx = 2.2 and Assym = 0.55.
+
+For BrdIndx = 2.5 and Assym = 0.75:
+
+K = 1 approximation: BrdIndx = 2.45 and Assym = 0.83.
+
+K = 3 approximation: BrdIndx = 2.5 and Assym = 0.8.
+
+K = 100 approximation: BrdIndx = 2.2 and Assym = 0.55.
+
+## Excercise 3
+
+```{r}
+# Set up the new case to classify
+new_case <- data.frame(BrdIndx=2.5, Assym=0.75)
+
+# Set up data.frame of predictors & vector of true classes
+train_predictors_2 <- train %>% 
+    dplyr::select(BrdIndx, Assym)
+train_class <- train$type
+
+# KNN with K=1
+knn(train = train_predictors_2, 
+    test = new_case, 
+    cl = train_class, k = 1, prob = TRUE)
+
+# KNN with K=3
+knn(train = train_predictors_2, 
+    test = new_case, 
+    cl = train_class, k = 3, prob = TRUE)
+
+# KNN with K=100
+knn(train = train_predictors_2, 
+    test = new_case, 
+    cl = train_class, k = 100, prob = TRUE)
+```
+
+## Excercise 4
+
+```{r}
+knnplot <- function(x1, x2, y, k){
+     x1s <- seq(min(x1), max(x1), len = 100)
+     x2s <- seq(min(x2), max(x2), len = 100) 
+     testdata <- expand.grid(x1s,x2s)
+     knnmod <- knn(train = data.frame(x1,x2), test = testdata, cl = y, k = k, prob = TRUE)
+     testdata <- testdata %>% mutate(class = knnmod)
+     ggplot(testdata, aes(x = Var1, y = Var2, color = class)) + 
+         geom_point() + 
+         labs(x = "x1", y = "x2")
+}
+```
+
+### 4a)
+
+To plot the classification borders of the KNN with neighborhoods of size K = 50
+ .
+```{r}
+knnplot(x1 = train$BrdIndx, x2 = train$Assym, y = train$type, k = 50)
+```
+
+### 4b)
+
+Before plotting anything, I anticipate that if we change K=1 we will see a lot more small regions of objects instead of large, connected regions.
+
+Testing it:
+```{r}
+knnplot(x1 = train$BrdIndx, x2 = train$Assym, y = train$type, k = 1)
+```
+
+I was right! I think that this is because with small neighborhoods large overall trends are not captured.
+
+### 4c)
+
+If we use k=100, I think we will see a larger, dominating trend/object than we saw in K=50.
+
+Testing this hypothesis:
+```{r}
+knnplot(x1 = train$BrdIndx, x2 = train$Assym, y = train$type, k = 100)
+```
+
+I was right. This is because, in the large case we only take the average of our data, and thus all local trends are lost, which is the opposite of the phenomena that we see for the small K value.
+
+### 4d)
+
+Based on the plots above, we can see the Goldilocks challenge of selecting a proper K value. If our K value is too large, we lose all local trends in our data and learn nothing. If our K is too small, we can not really see the large, overarching trends present in our data sets. Thus, our K must be just right in order to see overall data trends while keeping insight into local trends in the data set.
+
+## Excercise 5)
+
+
+### 5a)
+```{r}
+# Pick only the variables to use in classifying the test cases
+test_cases <- test %>% dplyr::select(BrdIndx, Assym)
+
+# K=1 classifications
+knn_pred_1   <- knn(train = train_predictors_2, test = test_cases, cl = train_class, k = 1)
+
+# K=4 classifications
+knn_pred_4   <- knn(train = train_predictors_2, test = test_cases, cl = train_class, k = 4)
+
+# K=100 classifications
+knn_pred_100   <- knn(train = train_predictors_2, test = test_cases, cl = train_class, k = 100)
+```
+
+### 5b)
+
+```{r}
+true_type <- test$type
+table(knn_pred_1, true_type)
+```
+
+```{r}
+true_type <- test$type
+table(knn_pred_4, true_type)
+```
+
+```{r}
+true_type <- test$type
+table(knn_pred_100, true_type)
+```
+
+
+### 5c)
+
+```{r}
+train_all_predictors <- train %>%
+  dplyr::select(-type, -class)
+
+test_all_cases <- test %>% dplyr::select(-class, -type)
+
+# K=1 classifications
+knn_pred_all_1   <- knn(train = train_all_predictors, test = test_all_cases, cl = train_class, k = 1)
+
+true_type <- test$type
+table(knn_pred_all_1, true_type)
+```
+
+```{r}
+# K=4 classifications
+knn_pred_all_4   <- knn(train = train_all_predictors, test = test_all_cases, cl = train_class, k = 4)
+
+true_type <- test$type
+table(knn_pred_all_4, true_type)
+```
+
+```{r}
+# K=100 classifications
+knn_pred_all_100   <- knn(train = train_all_predictors, test = test_all_cases, cl = train_class, k = 100)
+
+true_type <- test$type
+table(knn_pred_all_100, true_type)
+```
+
+If we use all predictors, we see more of a trend toward selecting natural types overall. 
+
+## Extra Excercise 6
+
+Generalizing KNN plot:
+
+I think all we really have to do is change len=100 to be the number of data points? 
+
+```{r}
+knnplot_general <- function(x1, x2, y, k){
+     x1s <- seq(min(x1), max(x1), len = length(x1))
+     x2s <- seq(min(x2), max(x2), len = length(x2)) 
+     testdata <- expand.grid(x1s,x2s)
+     knnmod <- knn(train = data.frame(x1,x2), test = testdata, cl = y, k = k, prob = TRUE)
+     testdata <- testdata %>% mutate(class = knnmod)
+     ggplot(testdata, aes(x = Var1, y = Var2, color = class)) + 
+         geom_point() + 
+         labs(x = "x1", y = "x2")
+}
+```
+
+
+```{r}
+knnplot_general(x1 = train$BrdIndx, x2 = train$Assym, y = train$type, k = 50)
+knnplot_general(x1 = train$BrdIndx, x2 = train$Assym, y = train$type, k = 1)
+knnplot_general(x1 = train$BrdIndx, x2 = train$Assym, y = train$type, k = 100)
+```
+

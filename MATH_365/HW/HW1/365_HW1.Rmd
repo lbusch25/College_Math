@@ -1,0 +1,382 @@
+# Math 365 / Comp 365: Homework 1
+
+### Please submit a *stapled* hard copy of your work
+
+Reminder: you are allowed---in fact encouraged---to work on and discuss homework together. You should, however, write up your own assignments in your own words. If you work with another person or if you get significant help from a classmate or external resource, you should give that person or resource credit in your solution (at no penalty to you)
+
+## INSERT YOUR NAME HERE 
+
+# Lawson Busch
+
+```{r,message=FALSE}
+require(Matrix)
+```
+
+### Problem 1
+The point of this problem is twofold: (i) to illustrate what can happen if you accumulate many truncations of numbers and (ii) to give you practice writing programs.
+
+In the 1999 movie Office Space, a character creates a program that takes fractions of cents that are truncated in a bank's transactions and deposits them into his own account. This is not a new idea, and hackers who have actually attempted it have been arrested. In this exercise, you will simulate the program to determine how long it would take to become a millionaire this way. 
+
+Assume the following details:
+
+* You have access to 10,000 bank accounts
+
+* Initially, the bank accounts have values that are uniformly distributed between $100 and $100,000
+
+* The nominal annual interest rate on the accounts is 5%
+
+* The daily interest rate is thus .05/365
+
+* Interested is compounded each day and added to the accounts, except that fractions of a cent are truncated 
+
+* The truncated fractions are deposited into an illegal account that initially has a balance of $0
+
+* The illegal account can hold fractional values and it also accrues daily interest
+
+Your job is to write an R script that simulates this situation and finds how long it takes for the illegal account to reach a million dollars.
+
+
+-------------------
+
+Here is some R help:
+
+The following code generates the initial accounts:
+```{r}
+options(digits=10)
+accounts=runif(10000,100,100000)
+accounts = floor(accounts*100)/100 #Removes the fractional cents by flooring after 2 decimal places (*100) then converting back to dollars
+```
+The first line expands the number of digits displayed. The second sets up 10,000 accounts with values uniformly between 100 and 100,000. The third line removes the fractions of cents (look at the data before and after that line is applied). To calculate interest for one day:
+```{r}
+interest = accounts*(.05/365)
+```
+Depending on how you do it, you might want to use an if-then statement. For example, you might use something like
+
+```
+if (illegal > 1000000) break
+```
+
+The `break` command breaks out of a loop. Or, perhaps more elegantly, you might use a `while` loop
+
+```
+while (illegal < 1000000) { do stuff here }
+```
+
+You can find help on syntax in the Help Menu under "The R Language Definition." That's where I went to remind myself about the syntax for an if-then statement and a while loop.
+
+#### Problem 1 Answer
+
+```{r}
+countDays = function(accounts){
+  illegal = 0
+  days = 0
+  #ones = rep(1, 10000)
+  while(illegal < 1000000) {
+    #print(accounts)
+    days = days + 1
+    #print(days)
+    interest = accounts*(.05/365)
+    accounts = accounts + interest
+    flr = floor(accounts*100)/100
+    #print(flr)
+    #illegal = illegal + (ones)%*%t(accounts-flr) #This needs to be converted to an integer
+    illegal = illegal + sum(accounts-flr)
+    illegal = illegal * (1+0.05/365)
+    #print(illegal)
+    accounts = flr
+  }
+  return(days)
+}
+
+options(digits=10)
+testAccounts=runif(10000,100,100000)
+countDays(testAccounts)
+```
+
+The illegal account would reach one million dollars in 9,627 days, or approximately 26.38 years.
+
+### Problem 2
+
+The function
+```
+f(x)=(cos(x))^2+sin(x)-1
+```
+has roots at both $\pi$ and $\pi/2$. 
+
+a) Using the convergence properties we discussed in class, estimate how many iterations of the bisection method are necessary to find the accurate solution to eight correct decimal places, when we start with a bracketing interval of [2.5,3.5].
+
+If
+```
+f(x)=(cos(x))^2+sin(x)-1
+```
+and the interval is [2.5, 3.5] and we want an accurate solution to 8 correct decimal places, then:
+```
+(b-a)/(2^(i+1)) <= (1/2) * 10^-8
+
+1/(2^(i+1)) <= (1/2) * 10^-8
+
+2*10^8 <= 2^(i+1)
+
+log10(10^8) <= log10(2^i)
+
+8/(log10(2)) <= i
+
+i >= 26.57 (approximately)
+```
+
+This implies that in order to have an accurate solution to 8 correct decimal places then we would need to have 27 iterations of the bisection method.
+
+b) Use your `bisect` function to see how many iterations it actually takes.
+
+```{r}
+bisect = function(f,interval,tol=0.5*10^-10,max.its=40,verbose = FALSE){
+  history = rep(NA, max.its)  #Creates vector of NAs to allocate memory,
+  #Only returns the number of spaces filled when returned
+  a = interval[1]
+  b = interval[2]
+  count = 0
+  if(f(a)*f(b) > 0) {
+    stop("f(a)f(b)<0 not satisfied") #Returns and prints out this error message
+    #Similar to a try catch loop
+  }
+  while((b-a)/2 > tol){
+    count = count + 1
+    c = (a+b)/2
+    history[count] = c
+    if(verbose == TRUE) { #Essentially a debugging loop in R, can toggled with verbose input
+      print(count)
+      print(c(a,history[count],b,b-a))
+    }
+    if(f(c) == 0){
+      root = c
+      return (list(root=root,history=history[!is.na(history)], count = count))
+    } 
+    if(f(a)*f(c) < 0) {
+      b = c
+    } else {
+      a = c
+    }
+  }
+  root = c
+  return(list(root=root,history=history[!is.na(history)], count = count))
+}
+
+f = function(x) {
+  return((cos(x))^2+sin(x)-1)
+}
+
+intervalB = c(2.5, 3.5)
+
+bisect(f, intervalB)
+```
+
+While the biesection method returns after 34 iterations, we can see from looking at the history that the method becomes accurate to 8 decimal points at 27 iterations, as from this point onwards, every result begins with the number 3.14159265, the exact same 8 decimal places, making the function accurate to 8 decimal places after this point.
+
+c) By hand, compute a formula for Newton's iteration for this particular choice of $f(x)$; i.e., write a formula for $x_{i+1}$ in terms of $x_{i}$.
+
+Newton's iteration for f(x):
+
+Note: xi1 and xi are the i+1 iteration and ith iteration of x, respectively.
+
+```
+xi1 = xi - f(xi)/f'(xi) for (cos(x))^2 + sin(x) - 1
+
+xi1 = xi - ( (cos(x))^2 - sin(x) - 1) / ( -2*sin(x)*cos(x) + cos(x))
+```
+
+
+d) Set $x_0$ to 4.25, run 50 iterations of your Newton's formula from c) to compute $\{x_i\}_{i=0,1,\ldots,50}$, and compute $e_i=|x_i-\pi|$ for all $i$. When does the iteration converge? Now plot $e_i / e_{i-1}$ over all $i$ until convergence. What is the convergence order and rate to $\pi$?
+
+```{r}
+newtons=function(x) {
+  Newx = x - (((cos(x))^2+sin(x)-1)/(-2*sin(x)*cos(x)+cos(x)))
+  return(Newx)
+}
+
+xVec = 1:50
+eVec = 1:50
+
+x = 4.25
+
+for(i in 1:50) {
+  xVec[i] = x
+  ei = abs(x-pi)
+  eVec[i] = ei #Still need to plot ei over convergence
+  x= newtons(x)
+}
+
+#deriv1 = D(cos(x)^2 + sin(x) - 1~x)
+
+deriv1 = function(x) {
+  return(-2*sin(x)*cos(x)+cos(x))
+}
+
+deriv2 = function(x) {
+  return(sin(x)*(2*sin(x)-1)-2 *cos(x)^2)
+}
+
+deriv1(pi) #Not zero implies quadratic convergence
+
+#Calculates what errors should converge to
+deriv2(pi)/(2*deriv1(pi))
+
+errors = eVec 
+n = length(errors)
+(ratios=errors[2:n]/errors[1:(n-1)]^1)
+
+iterations = seq(0, 5)
+plot(iterations, ratios[1:6], type = 'p')
+
+ratios2=errors[2:n]/errors[1:(n-1)]^2
+plot(iterations, ratios2[1:6], type = 'p')
+```
+
+
+Here we can see from the error equation for newton's method that the error ratios should converge to 1 for pi. We also know that since f(r) = 0 and f'(r) != 0, that Newton's method should be locally and quadratically convergent for f(pi). When checking our error ratios for linear convergence, we see that the error ratios do not converge to one, and thus that our function is not linearly convergent for pi, which is what we expect for Newton's method for this case. Further, if we check our error ratios for quadratic convergence, we see that they do in fact converge to 1 quadratically, demonstrating that newtons method is quadratically convergent with a convergence rate of 1 for f(pi).
+
+e) Repeat d) with $x_0$=1.5. What is the convergence order and rate to $\pi/2$? If your answer is different from d), explain why.
+
+```{r}
+xVec = 1:50
+eVec = 1:50
+
+x = 1.5
+
+for(i in 1:50) {
+  xVec[i] = x
+  ei = abs(x-pi/2)
+  eVec[i] = ei #Still need to plot ei over convergence
+  x = newtons(x)
+}
+
+#print(xVec)
+#print(eVec)
+
+deriv1(pi/2) #Zero implies not quadratically convergent
+
+#Linear
+errors = eVec
+n = length(errors)
+(ratios3=errors[2:n]/errors[1:(n-1)]^1)
+
+iterations1 = seq(0, 8)
+plot(iterations1, ratios3[1:9], type = 'p')
+
+#Quadratic
+ratios4=errors[2:n]/errors[1:(n-1)]^2
+plot(iterations1, ratios4[1:9], type = 'p')
+```
+
+Since f'(r) = 0 for f(pi/2), we know that newton's formula does not converge locally and quadratically for f(pi/2). For an initial guess of x = 1.5, we can see that this function is linearly convergent to 1/2, as the errors eventually converge to 1/2 for an exponent of 1 in the error equation. We can also see that it is not quadratically convergent, as it keeps growing continuosly with an exponent value of 2 in the error equation. This shows that the function is linearly convergent with a convergence rate of 1/2 for a starting x value of 1.5. This matches the expected results of newton's method for f(pi/2) since we expected it to not converge quadratically.
+
+
+### Problem 3
+Computer Problem 7 from Section 1.1 of the book (involving a determinant). 
+
+```{r}
+problem3 = function(x) {
+  A = rbind(c(1, 2, 3, x), c(4, 5, x, 6), c(7, x, 8, 9), c(x, 10, 11, 12)) 
+  a = det(A) - 1000
+  return(a)
+}
+
+interval = c(0, 20)
+
+# 9.708299123
+
+bisect(problem3, interval)
+
+interval2 = c(-20, 0)
+
+# -17.18849815
+
+bisect(problem3, interval2)
+
+problem3(9.708299123)
+problem3(-17.18849815)
+
+A1 = rbind(c(1, 2, 3, 9.708299123), c(4, 5, 9.708299123, 6), c(7, 9.708299123, 8, 9), c(9.708299123, 10, 11, 12))
+det(A1)
+
+A2 = rbind(c(1, 2, 3, -17.18849815), c(4, 5, -17.18849815, 6), c(7, -17.18849815, 8, 9), c(-17.18849815, 10, 11, 12))
+det(A2)
+```
+
+By using the bisection method on the interval [0, 20] we can find the first root of 9.708299123, and by using the bisection method on the interval [-20, 0] we can find the second root of -17.18849815. When plugged back in to our problem 3 equation, we see that we get an incredibly small number that is essentially 0 for both equations, demonstrating that both roots make the determinate of the matrix = 1000 when substituted for x. This is further evidenced by reconstructing the matrix with these numbers substututed for x, and taking the determinant of the matrix. Both determinants result in an answer that is essentially equal to 1000.
+
+
+### Problem 4
+Computer Problem 8 from Section 1.1 of the book (involving the Hilbert matrix)
+
+```{r}
+library(Matrix)
+H=Hilbert(5)
+
+problem4 = function(x) {
+  B = Hilbert(5)
+  B[1, 1] = x
+  b = det(B - pi*diag(5)) #diag(5) creates the identity matrix
+  return(b)
+}
+
+inter = c(0, 20)
+
+bisect(problem4, inter)
+
+# 2.948010765
+
+problem4(2.948010765)
+
+test = Hilbert(5)
+test[1,1] = 2.948010765
+
+max(eigen(test)$values)
+
+```
+
+By creating replacing the [1,1] column of the Hilbert matrix with a variable, x, we can use the bisection method to solve for the value of x at B[1, 1] in our function. Since we know that we want pi as our maximum eigenvalue, we simply substitute pi for lamda in the equation det(B) - lamda*I = 0 to solve for eigenvalues. After using the bisection method we get the root 2.948010765, which when plugged in for x in our problem 4 equation, gives us an incredibly small value essentially equal to 0, demonstrating that it is indeed the value for B[1, 1] that would make pi an eigenvalue of the hilbert matrix. It also makes pi the maximum eigenvalue for the matrix, as can be seen by max(eigen(test)$values) resulting in pi.
+
+#### *Some hints for Problems 3 and 4:*
+
+1. To bind rows together into a matrix:
+```{r}
+rbind(c(1,2,3,44),c(4,5,44,6),c(7,44,8,9),c(44,10,11,12)) 
+```
+
+2. If A is a matrix, then `det(A)` is its determinant
+
+3. For Problem 3, make a function of `x` that puts `x` on the backward diagonal, computes its determinant, and subtracts 1000. Then use your `bisect` on this function.
+
+4. For Problem 4, to get the Hilbert matrix, `H`, you can use the `Hilbert` function from the `Matrix` package. Here is an example of how to generate a Hilbert matrix and change the first entry:
+```
+H=Hilbert(5)
+H[1,1]=132
+```
+
+5. To get the maximum eigenvalue of a matrix `A`, use 
+```
+max(eigen(A)$values)
+```
+6. In R, your favorite irrational and transcendatal number is written as `pi`:
+```{r}
+pi
+```
+
+
+###  R Markdown Tips
+You can assemble your homework writeup however you like, but I strongly encourage you to give R Markdown a shot. I was skeptical of learning yet another new tool, but it only takes 15 minutes to get a pretty good handle, and so far I really like it.  
+
+If the R code you place inside the hash marks has printed output, it will display like this:
+```{r}
+(uniformSamples<-runif(10,0,1))
+mean(uniformSamples)
+```
+You can also include comments and embed plots:
+```{r fig.width=5, fig.height=5}
+# Define a polynomial function
+f = function(x) {x^3 + x^2 - 24*x + 36}
+# Plot the function
+x = seq(-8,4,len=10000)
+plot(x,f(x),type="l",lwd=3,main="f(x) = x^3 + x^2-24 * x +36")
+abline(0,0,col="red")
+```

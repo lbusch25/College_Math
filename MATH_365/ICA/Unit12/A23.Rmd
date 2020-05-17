@@ -1,0 +1,216 @@
+# Math 365 / Comp 365: Activity 23: Markov Chains
+
+```{r,message=FALSE}
+source("https://drive.google.com/uc?export=download&id=10dNH3VbvxS8Z3OHjP4i9gRbtsf91VVBb") #365functions.R
+require(Matrix)
+require(expm)
+require(igraph)
+```
+
+### Exercise 1
+
+Every position in the United States House of Representatives is up for election **every two years**. A recent Math 236 alum built the following (overly) simplistic model for predicting the political party of the winning candidate in our local congressional district:
+
+- If our current representative is a Democrat, there is a 75% chance that a Democrat will win the next election, and a 25% chance that a Republican will win the next election
+
+- If our current representative is a Republican, there is a 50% chance that a Democrat will win the next election, and a 50% chance that a Republican will win the next election
+
+Note that this model assumes that the winner will always be a Democrat or Republican.
+
+(a) We can model the political party of the current representative as a Markov chain with two states. Draw a state diagram with the transition probabilities, and write down the transition matrix $P$. Let the first state be Democrat.
+
+(b) We can represent the Markov chain as the dynamical system $x_{k+1}=Ax_k$, where $x_k \in \mathbb{R}^2$ is a vector whose first component represents the probability that a Democrat wins the $k^{th}$ election, and the second component represents the probability that a Republican wins the $k^{th}$ election. What is the matrix $A$ so that $x_{k+1}=Ax_k$? Hint: Double check your $A$ on a simple example!
+
+$A$ = $P^T$.
+
+(c) Let $k=0$ be the year 2016 election. A Democrat won the election then, so we'll take $x_0=\left[1 \atop 0\right]$. According to the model, what is the **exact** probability that a Democrat will win the election in 2024? 
+
+```{r}
+library(expm)
+```
+
+
+```{r}
+P = rbind(c(3/4, 1/4), c(1/2, 1/2))
+A = t(P)
+x0 = c(1, 0)
+k = 4
+Ak = A %^% k
+xk = Ak%*%x0
+xk
+```
+
+
+Hint: to raise a matrix $A$ to the power 3, make sure the `expm` package is installed, and type `A%^%3`. This function can't handle sparse matrices, however, so if $A$ were stored that way, you would need to write `as.matrix(A)%^%3`.
+
+(d) Is the Markov chain periodic? irreducible? Is the matrix $A$ stochastic? 
+
+The Markov chain is Aperiodic, and irreducible and $A$ is stochastic.
+
+(e) According to the model, what is the **approximate** probability that a Democrat will win the election in the year 2500? Hint: use eigenvalues, eigenvectors, and the Perron-Frobenius Theorem! Would your answer be different if a Republican had won the last election?  
+
+```{r}
+out = eigen(A)
+(2500-2018)/2
+
+x0 = c(1, 0)
+k = (2500-2018)/2
+Ak = A %^% k
+xk = Ak%*%x0
+xk
+
+#Can sum eigenvector components and divide by that to get the answer as well
+domVec = out$vectors[,1]
+domVec
+finalPercent = domVec/(domVec[1]+domVec[2])
+finalPercent
+```
+
+
+### Exercise 2
+
+Congratulations, you just turned 21! First step: go on kayak.com to find a cheap flight. Second step: go on hotwire.com to find a cheap hotel. Third step: Vegas, baby!
+
+Your plan is to bring \$100 of gambling money, gamble \$1 at a time, and stop gambling when you hit \$0 (then learn how to take joy in your friends' successes) or when you hit \$200 (at which point you'll have no trouble finding different ways to spend your winnings in Vegas). Let's assume at first that the probability of winning each game is 50% (probably not the best assumption).
+
+(a) Let's model your earnings with a Markov chain. What are the states? Draw a state diagram and label the edge with probabilities.
+
+(b) Form the transition matrix $P$. Hint: use my `TriDiag` function from `365Functions.r`. Check that $P$'s rows sum to 1 using the command `rowSums`. 
+
+```{r}
+p1 = 1/2
+vec1 = rep(0, 201)
+vec1[1] = 1
+vec1[201] = 1
+upper = rep(p1, 200)
+upper[1] = 0
+lower = rep(1-p1, 200)
+lower[200] = 0
+P = TriDiag(vec1, lower, upper)
+tP = t(P)
+colSums(tP)
+```
+
+
+(c) Numerically compute the probability that you have \$105 after placing 10 different \$1 bets. How about \$106?
+
+```{r}
+x100 = rep(0, 201)
+x100[101] = 1
+Pk = as.matrix(tP)%^%10
+xk100 = Pk %*% x100
+xk100
+```
+
+The probability that you have $105 after 10 iterations is 0%, while the probability that you have $106 after 10 iterations is 4.3%.
+
+(d) Use `eigen` to find the eigenvalues and eigenvectors of $P^{\top}$. What do you notice? Can you explain why the eigenvectors associated with the eigenvalue 1 are steady-state distributions?
+
+```{r}
+eigen(tP)
+```
+
+The eigenvectors associated with the eigenvalue 1 are steady-state distributions because they are associated with the 0 value and the 200 value, which is the end point for the Markov Chain and each of these points has no transitions to another state. 
+
+(e) This Markov chain is not irreducible! Once you reach \$0 or \$200, you cannot reach any other state. We say that those two states are ***absorbing*** states. We are interested in the absorption probabilities; i.e., what is the probability that you reach \$0 before \$200, and vice versa?
+
+To answer this, we can first reorder the state labels so that the absorption states \$0 and \$200 are the first two listed, and then everything else. That is, we can rearrange the transition matrix $P$ into the following form:
+$$P=\begin{bmatrix} I & 0 \\ B  & Q\end{bmatrix},$$
+where 
+
+- $I$ is a 2x2 identity matrix
+
+- $0$ is a $2 \times (N-2)$ matrix of zeros
+
+- $B$ is a $(N-2) \times 2$ matrix giving the transition probabilities from the non-absorbing states (called the ***transient*** states) to the absorbing states, and
+
+- $Q$ is the matrix of transition probabilities from the transient states to other transient states.
+
+To compute $B$ and $Q$ in `R`, you can either directly access the appropriate submatrices of the original transition matrix $P$ or you can rearrange $P$ into the form above.
+Here is an example of how to rearrange a matrix in R:
+```{r}
+(Z=matrix(1:16,nrow=4,ncol=4))
+new.order=c(1,4,2,3)
+(Z.rearranged=Z[new.order,new.order])
+```
+
+Once you have $B$, $Q$, and $I$, to find the absorption probabilities, compute the ***fundamental matrix*** $S=(I-Q)^{-1}$, and the probabiity of absorbing into state $j$ (say \$0 in this case) starting from transient state $i$ (say \$100 in this case) is $(SB)_{ij}$. If you start with \$100, what is the probability of reaching \$200 before going broke? How does it change if you start with \$120 and only aim to make \$80 profit?
+
+Aside: we won't go into details about why $SB$ is the solution to the absorption probabilities. For that, you'll need to take some probability!
+
+```{r}
+I = diag(2)
+N = rbind(rep(0, 199), rep(0, 199))
+B = cbind(P[2:200, 1], P[2:200, 201])
+Q = P[2:200, 2:200]
+weirdP = rbind(cbind(I, N), cbind(B, Q))
+```
+
+```{r}
+S = solve(diag(nrow(Q))-Q)
+SB = S%*%B
+
+SB[100, 1]
+
+SB[100, 2]
+
+SB[120, 2]
+```
+
+
+(f) Does your probability of reaching \$200 before going broke change if you bet \$10 at a time or \$100 at a time?
+
+```{r}
+
+```
+
+
+(g) The actual odds of winning a game in Vegas are not equal to 50%! Let's say you are betting on red at the roulette wheel. Assuming it is a wheel with a double zero, your chances of winning each game are $18/38 \approx 47.4$%. Now does your  probability of reaching \$200 before going broke change if you bet \$10 at a time or \$100 at a time? What is the best strategy?
+
+Note 1 : the model in this problem does not take into account any utility you might derive from the free beverages provided by the casino for the duration of your gambling activities.
+
+Note 2: [Here](http://www.onlineroulette.ca/guides/american-vs-european-roulette.php) is some more information about single zero versus double zero roulette wheels. 
+
+### Exercise 3
+
+Russian historians often attribute the dominance and rise to power of Moscow to its strategic position on medieval trade routes (see below).  Others argue that sociological and political factors aided Moscow's rise to power, and thus Moscow did not rise to power strictly because of its strategic location on the trade routes.  You are to use eigenvectors to analyze this question.
+
+![](Images/MedievalRussia.PNG)
+
+
+The following code loads the name of the Russian cities (in `RusCity`), loads the adjacency matrix into the matrix `A`, and plots the graph.
+```{r, message=FALSE}
+# this package is required to plot the graph
+require(igraph)
+```
+```{r}
+# This loads the adjacency matrix into A and plots it
+source("https://drive.google.com/uc?export=download&id=12exaJ8eOwe-BVKYAPOD0RH25HrOP0Rjx")
+```
+
+(a) Let $B=A+I$ be the ***augmented adjacency matrix***, let $x=(1,1,\ldots,1)^{\top}$, and compute $Bx$, $B^2x$, $B^3x$. The entries are nonnegative integers, and they can be interpreted as counting something. What does the $i^{th}$ entry $(B^k x)_i$ count?
+
+(b) The sequence $Bx$, $B^2x$, $B^3x$, ... should converge to the dominant eigenvector of $B$. Explain why the dominant eigenvector of the augmented adjacency matrix is a measure of accessibility. If this is not clear, you should have a look at the article ["Linear Algebra in Geography: Eigenvectors of Networks,"](http://www.jstor.org/stable/2689388?seq=1#page_scan_tab_contents) by Philip D. Straffin, Jr. in Mathematics Magazine, November 1980.
+
+(c) Is the augmented adjacency matrix $B$ primitive? How do you know?
+
+(d) Compute the dominant eigenvector of $B$.  Do it two ways: (i) use `R`'s function `eigen`; (ii) use my power iteration function `PI`.  Report the number of steps needed in power iteration so that the answer you get is correct to 2 decimal places in the infinity norm.
+    
+e) ***Gould's index of accessibility*** is just the dominant eigenvector of $B$, normalized so that the entries sum to 1; i.e., if $v$ is the dominant eigenvector, then Gould's index is
+```
+v/sum(v)
+```
+
+Compute Gould's index for this problem and answer the historians' question.
+
+### Exercise 4
+
+We can also think of the Google PageRank algorithm as the steady-state distribution of a Markov chain. We start with the adjacency matrix of a directed graph, with a link from site $i$ to site $j$ indicated by a 1 entry in $A_{ij}$. At each step of the Markov process, an internet surfer jumps to a random website with probability $q$, and follows one of the links on the current page with probability $1-q$. If jumping to a random site (including back to the current page), the probability of each site is $\frac{1}{N}$, where $N$ is the total number of websites. If following one of the links, the surfer chooses randomly from the $n_i$ links on the current page $i$ with equal probabilities. The PageRank is the steady-state distribution of this Markov chain. 
+
+Consider the following network of 15 websites. Let $q=0.15$, and use power iteration to find the PageRank values for each website. Remember to normalize the dominant eigenvector so that it sums to 1. Which sites have the most inward-pointing links? Which sites have the highest PageRank? Are they the same?
+
+![GoogleAdjacencyPic](https://drive.google.com/uc?export=download&id=1pvebXmtzN2kelSsUhMEen0fb1xf9Jwsh) ![GoogleAdjacencyMatrix](Images/google_adjacency_matrix.PNG)
+
+```{r}
+A=spMatrix(nrow=15,ncol=15,i=c(1,1,2,2,2,3,3,3,4,4,5,5,6,6,7,7,8,8,9,9,9,10,11,12,12,12,13,14,14,14,14,15,15,13),j=c(2,9,3,5,7,2,6,8,3,12,1,10,10,11,10,11,4,11,5,6,10,13,15,7,8,11,9,10,11,13,15,12,14,14),rep(1,34))
+```

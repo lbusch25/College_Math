@@ -1,0 +1,147 @@
+
+## Math 365 / Comp 365: Activity 18
+## Gram-Schmidt Orthogonalization and the QR Decomposition
+
+```{r,message=FALSE}
+require(Matrix)
+source("https://drive.google.com/uc?export=download&id=10dNH3VbvxS8Z3OHjP4i9gRbtsf91VVBb")
+```
+
+### Exercise 1
+
+You should do part (a) of this problem ***by hand***.
+
+a) Use the classical Gram-Schmidt orthogonalization algorithm to find the reduced QR factorization and full QR factorization of the matrix 
+
+$$ A = \begin{pmatrix}
+2 & 3 \\
+-2 & -6 \\
+1 & 0
+\end{pmatrix}.$$
+
+b) First check your answers by checking that $A=QR$ and $A=\bar{Q}\bar{R}$. Then check if you computed the same factorizations as the `qr` function in R, which you can do with the following code
+
+```{r}
+A = cbind(c(2, -2, 1), c(3, -6, 0))
+A
+```
+
+
+```{r}
+# Reduced QR
+out=qr(A)
+(R=qr.R(out))
+(Q=qr.Q(out))
+Q%*%R
+```
+
+Note that R's `qr` algorithm does not ensure that all of the diagonal entries of $R$ are nonnegative (in which case the factorization is not unique). If you want to force the $R$ matrix to have positive diagonal entries, you can form a diagonal matrix $S$ whose $i^{th}$ diagonal is equal to the sign of the $i^{th}$ diagonal of $R$. Then let $\tilde{Q}=QS$ and $\tilde{R}=SR$, so that $\tilde{Q}\tilde{R}=QS^2 R=QR=A$ (since $S^2=I$).
+
+```{r}
+# Fix signs
+s=sign(diag(R))
+S=diag(s)
+Q.tilde=Q%*%S
+R.tilde=S%*%R
+Q.tilde%*%R.tilde
+```
+
+```{r}
+# Full QR
+(R.bar=qr.R(out,complete=TRUE))
+(Q.bar=qr.Q(out,complete=TRUE))
+Q.bar%*%R.bar
+```
+c) Use the reduced QR factorization of $A$ from part (a) to find the least squares solution to 
+$$ \begin{pmatrix}
+2 & 3 \\
+-2 & -6 \\
+1 & 0
+\end{pmatrix}
+\begin{pmatrix}
+x_1 \\
+x_2
+\end{pmatrix}
+=
+\begin{pmatrix}
+3 \\
+-3\\
+6
+\end{pmatrix}
+.$$
+```{r}
+b = c(3, -3, 6)
+outC = qr(A)
+solve(qr.R(outC), t(qr.Q(outC))%*%b)
+#qr.solve(outC, b)
+```
+
+d) You can check that $\bar{Q}^{\top}b=\begin{bmatrix} 6 \\ -3 \\ -3 \end{bmatrix}$. Without doing extra computations (i.e., do not actually multipling out $Ax_*-b$), what is the squared error $||Ax_* - b||_2^2$ associated with the least squares solution in part (c)?
+
+So the least squares error assosiacted with $\hat{Q}$ is 9, since the portion of $\bar{Q}$ that is $\hat{Q}$ is simply the last column in the result of $\bar{Q}*b$, and we know that the least square error is $||\hat{Q}^T*b||^2$, so since the norm of the last column is 3, we know the least squares error is 9. 
+
+e) Recall that if $A$ is an $m\times n$ matrix, the null space of $A^{\top}$ is the  orthogonal complement of the column space of $A$ and $\hbox{dim}(\hbox{null}(A^{\top}))+\hbox{dim}(\hbox{col}(A))=m$. Use the full QR factorization of the $A$ matrix above to find a basis for the null space of $A^{\top}$.  
+
+```{r}
+Q.bar[,3]
+```
+
+We know that the orthogonal complement of the column space in the QR matrix is the set of columns that make up $\hat{Q}$. In this case we know that $\hat{Q}$ is only the last column of $\bar{Q}$. Thus by pulling the last column of $\bar{Q}$, we can find a basis for the nullspace of $A^{\top}$. This is the vector (-2/3, -1/3, 2/3).
+
+### Exercise 2
+
+In this exercise, we compare the Cholesky and QR methods for solving a least squares problem. 
+
+Let $A=\begin{bmatrix} 1 & -1 \\ 0 & 10^{-6} \\ 0 & 0 \end{bmatrix}$ and $b=\begin{bmatrix} 0 \\ 10^{-6} \\ 1 \end{bmatrix}$. The normal equations for the least squares solutions to $Ax=b$ are 
+$$ A^{\top}Ax=\begin{bmatrix} 1 & -1 \\ -1 & 1+10^{-12}  \end{bmatrix} \begin{bmatrix} x_1 \\ x_2 \end{bmatrix} = \begin{bmatrix} 0 \\ 10^{-12} \end{bmatrix} = A^{\top} b,$$
+
+and it is easy to confirm that the least squares solution is $\begin{bmatrix}1 \\ 1 \end{bmatrix}$.
+
+a) Let's start with Cholesky. Use `chol` to find an upper triangular matrix $R_c$ such that $R_c^{\top} R_c=A^{\top}A$. Then, use `forwardsolve` and `backsolve` to solve the normal equations in two steps.
+
+b) Now use the function `qr.solve(A,b)` to solve the least squares problem with the QR factorization. Which solution is more accurate? 
+
+### Exercise 3
+
+The vectors $u$ and $v$ below are the x-coordinates and y-coordinates of 50 points $(u_i,v_i)$ in the plane. We want to fit a circle to these points. Denote the center of the circle by $(u_c,v_c)$ and the radius by $R$. A point $(u,v)$ is on the circle if $(u-u_c)^2+(v-v_c)^2=R^2$. We can therefore formulate the fitting problem as 
+
+$$\min_{u_c,~v_c,~R} \left\{\sum_{i=1}^{50} \left[(u_i-u_c)^2+(v_i-v_c)^2-R^2\right]^2  \right\}.$$
+
+If we do a change of variable $w=u_c^2+v_c^2-R^2$, then we can write the above problem as a linear least squares problem 
+$$\min_{x}||Ax-b||^2,$$
+where $x=\begin{bmatrix} u_c \\ v_c \\ w \end{bmatrix}$.
+
+```{r}
+u = c(-3.9265307,-3.1716160e+00,-1.6115988e+00,-2.6679398e+00,-1.7299714e+00,-2.2185018e+00,-2.0618500e+00,-1.4774499e+00,-3.2095408e+00,-2.0139385e+00,-2.0965393e+00,-2.8414848e+00,-3.5516322e+00,-2.3325005e+00,-1.6889345e+00,-1.4937155e+00,-1.3103945e+00,-1.3082423e+00,-1.5221371e+00,-1.8621796e+00,-2.8784185e+00,-3.3058351e+00,-2.9418136e+00,-3.5689305e+00,-3.2715656e+00,-1.8167830e+00,-2.6160985e+00,-3.6369299e+00,-3.6094960e+00,-3.8213899e+00,-3.5639197e+00,-2.9667150e+00,-1.9473222e+00,-3.0470691e+00,-2.8955875e+00,-3.2029692e+00,-2.2688964e+00,-2.3212990e+00,-1.1585153e+00,-1.8993455e+00,-3.5771792e+00,-2.6473229e+00,-1.4699478e+00,-3.7978927e+00,-2.0968345e+00,-4.0118440e+00,-2.2415905e+00,-1.3737454e+00,-2.0935937e+00,-1.4260492e+00)
+
+v = c(5.7992251e+00,7.3130620e+00,7.5592434e+00,7.6911348e+00,5.5113079e+00,7.7442101e+00,7.7091849e+00,6.0549104e+00,7.5170875e+00,7.6045473e+00,5.1354212e+00,
+5.0671844e+00,7.3910732e+00,7.6949226e+00,5.3469286e+00,7.3473664e+00,6.8715471e+00,6.7842012e+00,5.7283630e+00,7.7633148e+00,7.7677261e+00,5.4778857e+00,5.0690285e+00,5.5246190e+00,7.6772318e+00,5.3181407e+00,7.6148680e+00,7.3524730e+00,6.0303455e+00,5.8476992e+00,5.8479253e+00,5.3237261e+00,5.1703804e+00,5.4245981e+00,7.7991795e+00,5.5734007e+00,7.8705366e+00,5.1617927e+00,6.1579013e+00,5.4067639e+00,7.2445803e+00,7.6805233e+00,6.1180277e+00,7.3691475e+00,7.6463880e+00,6.1479510e+00,7.7414349e+00,7.2054473e+00,5.2385698e+00,5.8594283e+00)
+```
+
+```{r}
+par(pty="s") # for the plot to be square
+plot(u,v,pch=19,col="red",xlim=c(-4.1,-1.1),ylim=c(5,8),xlab="u",ylab="v") # plot the initial data points
+```
+
+a) Define $A$ and $b$ in this least squares formulation. What are their dimensions?
+
+b) Solve the least squares problem to find $u_c$, $v_c$, and $w$ (you can solve the normal equations or use `qr.solve`), and then use the change of variable equation to find $R$.
+
+c) To double check your work, let's plot the data and the fitted circle using the following code:
+
+```
+# enter your values for uc, vc, and R here
+uc=
+vc=
+R=
+```
+
+```
+# plot code
+t=seq(0,2*pi,length=1000) # parameterize points on the circle
+par(pty="s") # for the plot to be square
+plot(R*cos(t)+uc,R*sin(t)+vc,type='l',lty=2,lwd=3,xlim=c(-4.1,-1.1),ylim=c(5,8),xlab="u",ylab="v") # plot the best fit line
+points(u,v,pch=19,col="red") # plot the initial data points
+points(uc,vc,pch=4) # plot an x at the center point (uc,vc)
+```
+

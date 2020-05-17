@@ -1,0 +1,155 @@
+
+## Math 365 / Comp 365: Activity 11
+## Preconditioning for the Jacobi and Conjugate Gradient Methods
+
+```{r,message=FALSE}
+require(Matrix)
+```
+
+### Iterative methods for solving systems of linear equations
+
+We are interested in solving our favorite problem: $Ax=b$, where $b$ is a $1000 \times 1$ column vector with every entry equal to 1. For $A$, we will use the `ThreeBanded` function we wrote in Activity A10 with $N=1000$ and an offset of 100.
+
+```{r}
+ThreeBanded=function(n,offset){
+  spMatrix(n,n,i=c(1:n,1:(n-1),2:n,(offset+1):n,1:(n-offset)),j=c(1:n,2:n,1:(n-1),1:(n-offset),(offset+1):n),x=c(.5+sqrt(1:n),rep(1,(2*(2*n-1-offset)))))
+}
+n=1000
+A=ThreeBanded(n,100)
+```
+
+Let's inspect our $A$ matrix to see the sparsity pattern:
+```{r}
+image(A)
+```
+
+We'll use two different iterative methods to solve $Ax=b$: Jacobi's method and the conjugate gradient method.
+
+Feel free to use my implementation of `vnorm` and `jacobi`:
+
+```{r}
+# Vector norm
+vnorm = function(v,p=2) { 
+  if ( p =="I") {
+    return(max(abs(v)))
+  }
+  else {
+    return(sum(abs(v)^p)^(1/p))
+  }
+}
+```
+```{r}
+# Solves Ax = b iteratively using the Jacobi Method
+# m is the maximum number of iterations: default m = 25
+# p is the p value of the matrix norm
+# tol is the stopping tolerance (using the relative residual norm on the backward error)
+jacobi = function(A,b,m=25,x = rep(0,n),p=2,tol=0.5*10^(-6),history=FALSE) {
+  n = length(b)
+  if (history) {
+    hist = matrix(NA,nrow=length(b),ncol=(m+1))
+    hist[,1] = x
+  }
+  d = diag(A)
+  R = A
+  R[cbind((1:n),(1:n))] = 0  # allows for r to be sparse  
+  steps=0
+  for (j in 1:m) {
+    x = (b - R %*% x)/d 
+    steps = steps+1
+    if (history) {hist[,(j+1)] = as.matrix(x)}
+    if (vnorm(b-A%*%x,p) <= vnorm(b,p)*tol) break 
+  }
+  if (history) return(list(x=x,iterations=steps,history = hist[,1:(steps+1)]))
+  else return(list(x=x,steps=steps))
+}
+```
+
+
+a) Run 35 iterations of Jacobi's method, with an initial guess, $x^{(0)}$, of all zeros. From the sequence of approximations $\left\{x^{(k)}\right\}_{k=0,1,\ldots,35}$, compute the sequence of residuals $\left\{r^{(k)}\right\}_{k=0,1,\ldots,35}$ with $r^{(k)}=b-Ax^{(k)}$, and then compute the two-norms of the residual vectors. Save your residual norms in a vector called `jac.res.norms`, and plot the residual norms versus the iteration number using the following code:
+
+```{r}
+b= rep(1, 1000)
+jacobi(A, b, m=35)
+```
+
+
+```
+plot(0:35,jac.res.norms,pch=20,type="o",log="y",xlab="iteration (k)",ylab=expression("|| r"[k]~"||"[2]),col="blue",ylim=c(1e-2,1e2))
+grid()
+```
+
+Note: to compute the residuals, you will either have to modify the output of my `jacobi.r` code or compute the residuals after calling that function. Either is fine, but I recommend the latter method, as it will make the subsequent parts of this problem easier.
+
+b) The matrix $A$ is symmetric, positive definite, so we can also try conjugate gradient. Woohoo! Here is code for conjugate gradient:
+
+```{r}
+# Conjugate Gradient Method
+# Inputs: symm pos def matrix A, rhs b, number of steps n, 
+# x is the initial guess, 
+# tol is a stopping condition on the size of the residual
+# history gives a full history
+# Output: solution x to Ax=b 
+ConjGrad = function(A,b,x = rep(0,length(b)),tol=1e-18,m = length(b),history=FALSE) {
+  n = length(b)
+  r = b - A %*% x
+  d = r
+  if (history) {
+    hist = matrix(NA,nrow=n,ncol=m+1)
+    hist[,1] = x
+  }
+  for (i in 1:m ) {
+    if (max(abs(r)) < tol) break
+    steps = i
+    alpha = (t(r) %*% r)/(t(d) %*% A %*% d)  # step length
+    x = x + alpha[1,1] * d                  # take step 
+    if (history) {hist[,i+1] = x[,1]}
+    rold = r
+    r = rold - alpha[1,1] * A %*% d         # new residual
+    beta = (t(r) %*% r)/(t(rold) %*% rold)   # improvement this step
+    d = r + beta[1,1]*d
+  }
+  if (history) {return(list(x=x,history=hist))}
+  else {return(list(x=x,steps=steps))}
+}
+```
+
+Run 35 iterations of the conjugate gradient method on the same problem, with the same starting guess. Compute the sequence of residuals and the sequence of their norms (call the norms `cg.res.norms`). Make a new plot with your results from both Jacobi's method and conjugate gradient, using the following code:
+
+```
+plot(0:35,jac.res.norms,pch=20,type="o",log="y",xlab="iteration (k)",ylab=expression("|| r"[k]~"||"[2]),col="blue",ylim=c(1e-4,1e2))
+lines(0:35,cg.res.norms,pch=20,type="o",col="red")
+grid()
+```
+
+c) The condition number of $A$ using the 2-norm is around 173.4. Larger condition numbers like this can slow down the convergence of the conjugate gradient method. Here is a trick to speed it up. Let $M$ be a diagonal matrix with the $i^{th}$ diagonal element equal to the square root of the $i^{th}$ diagonal element of $A$, which in this case is $\sqrt{0.5+\sqrt{i}}$. Then instead of solving $Ax=b$, we can multiply on the left by $M^{-1}$ and solve:
+
+$$ M^{-1}Ax=[M^{-1}A M^{-1}]M x = M^{-1}b. $$
+
+How do we do solve this new problem? We let $\hat{A}=M^{-1}A M^{-1}$ and $\hat{b}=M^{-1}b$. Then we use the conjugate gradient method to solve $\hat{A}\hat{x}=\hat{b}$ (again with an initial guess of zeros) in order to get a sequence of approximations $\left\{\hat{x}^{(k)}\right\}_{k=0,1,\ldots,35}$. Finally, since $\hat{x}=Mx$, we need to compute $x^{(k)}=M^{-1}\hat{x}^{(k)}$ for every $k$ to get our sequence of approximations to the original problem. Do these computations, compute the residuals $b-A x^{(k)}$ (using the original $A$ and $b$, not $\hat{A}$ or $\hat{b}$), and then plot the norms of these residuals (which you should call `pcg.res.norms`) on a new plot with the results from parts (a) and (b), using the following code:
+
+```
+plot(0:35,jac.res.norms,pch=20,type="o",log="y",xlab="iteration (k)",ylab=expression("|| r"[k]~"||"[2]),col="blue",ylim=c(1e-14,1e2))
+lines(0:35,cg.res.norms,pch=20,type="o",col="red")
+lines(0:35,pcg.res.norms,pch=20,type="o",col="green")
+grid()
+```
+
+### Preconditioning 
+
+The technique used in part (c) is called ***preconditioning***. By now you should be convinced that it works quite well in some cases. Here are some more general discussion points about preconditioning:
+
+- A more formal worst case convergence analysis for conjugate gradient shows that the speed of convergence is tied to the condition number of the $A$ matrix (roughly proportional to the square root of the condition number)
+
+- Faster convergence can occur when the eigenvalues of $A$ are clustered (the reason for this had to do with polynomial approximation, which we'll learn about in the next section)
+
+- So one main idea of preconditioning is convert the orginal problem $Ax=b$ to a new problem $\hat{A}\hat{x}=\hat{b}$ where we can easily recover $x$ from $\hat{x}$ and where (i) the condition number of $\hat{A}$ is lower and/or (ii) the eigenvalues of $\hat{A}$ are clustered. We also need the preconditioner $M$ to be easily invertible (i.e., we don't usually explicitly construct the inverse of $M$)
+
+- Developing good preconditioners is a major area of research in computational linear algebra
+
+- *"It is generally accepted that for large-scale applications, CG should nearly always be used with a preconditioner.*  - Shewchuk technical report
+
+- The preconditioner you used in part (c) here is called the *Jacobi preconditioner* or *diagonal scaling*. It is one of the simplest preconditioners 
+
+
+d) How does the condition number of $\hat{A}$ in part (c) compare to that of $A$? Are the eigenvalues of $\hat{A}$ more clustered than those of $A$?
+

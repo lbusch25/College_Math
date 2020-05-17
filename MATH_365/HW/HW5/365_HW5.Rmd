@@ -1,0 +1,553 @@
+# Math 365 / Comp 365: Homework 5
+## Lawson Busch
+Worked with Raven McKnight.
+
+### *Please bring a stapled hard copy of your answers to class*
+
+The following line sources functions from the class file `365Functions.r`. Download this file and then change the source link. Feel free to use any of these functions throughout the semester.
+```{r, message=FALSE, warning=FALSE}
+source("https://drive.google.com/uc?export=download&id=10dNH3VbvxS8Z3OHjP4i9gRbtsf91VVBb")
+require(Matrix)
+require(ggplot2)
+```
+
+Just an edited version of the VandermondeInterpolator Function used later in the code.
+```{r}
+VMI = function(x,y) {
+  n = length(x)
+  V = Vandermonde(x)
+  c = solve(V,y)
+  p = function(z) { 
+    Horner(c,z)
+    #c %*% z^(0:(length(c)-1)) this alternative is just fine as well
+  }  
+  #xx = seq(min(x)-1,max(x)+1,length=1000)
+  #yy=p(xx)
+  #plot(xx,yy,type='l',col='blue',xlab="x",ylab="y")
+  #points(x,y,pch=20,col='red')  
+  return(list(coeffs=c,interpolant=p))
+}
+```
+
+
+### Problem 1
+
+#### *Note: The first two parts of this question are from Activity 14*
+
+Consider the points (-2,0), (-1,14), (2,-4), (3,10). Find the degree 3 (i.e., the highest order term is $cx^3$) interpolating polynomial p(x) for these points in two different ways. 
+
+a) Calculate the Vandermonde matrix and solve the equation for the coefficients using `R`'s built-in `solve` function. 
+
+```{r}
+xvals = c(-2, -1, 2, 3)
+vandMat = Vandermonde(xvals)
+solve(vandMat, c(0, 14, -4, 10))
+```
+
+
+b) By hand, find the interpolating polynomial using Newton's divided differences.  You need to multiply it out to see that you are getting the same answer as above.
+
+
+Note: You can also find the same interpolating polynomial using Lagrange interpolation. I won't ask you to do this, but you should at least look at Lagrange interpolation and see how the algebra would yield the same solution. 
+
+Below is a matrix showing the results of calculating the coefficients using the Newton Divided Difference Method. The first two columns are the (x, y) point values, and each corresponding $S$ is a different phase of the slope calculation. Numbers with a subscript are the coefficients used in the p(x) polynomial before expansion.
+
+$$\begin{pmatrix}
+x & y & S_1 & S_2 & S_3 \\
+-2 & 0_1 & & & \\
+& & 14_2 & & \\
+-1 & 14 & & -5_3 &  \\
+& & -6 & & 2_4\\
+2 & -4 & & 5 & \\
+& & 14 & & \\
+3 & 10 & & & \\
+\end{pmatrix}
+$$
+
+
+From this result we get that the polynomial $p(x)$ is:
+
+$$p(x) = -2*0 + 14(x+2)  -5(x+2)(x+1) + 2(x+2)(x+1)(x-2)$$
+
+Which we can expand:
+$$p(x) = 14x+28 -5(x^2+3x+2) + 2(x^2+3x+2)(x-2)$$
+
+
+$$p(x) = 14x+28 -5(x^2+3x+2) + 2(x^2+3x+2)(x-2)$$
+
+$$p(x) = 14x+28 -5x^2-15x-10 + 2(x^3+x^2-4x-4)$$
+
+$$p(x) = 14x+28 -5x^2-15x-10 + 2x^3+2x^2-8x-8$$
+
+$$p(x) = 14x+28 -5x^2-15x-10 + 2x^3+2x^2-8x-8$$
+$$p(x) = 2x^3-3x^2-9x+10$$
+So our final vector of coefficients is (10, -9, -3, 2), which is the same as the Vandermonde Interpolation method.
+
+
+c) In `365Functions.r`, I have included a function `Interpolator` that does polynomial interpolation using either the Vandermonde matrix or Newton's divided difference method. In theory, these two methods should yield the same interpolating polynomial (which is unique as long as the interpolation points are at different x values). Have a quick look at my code to understand what it is doing. Then find an example where the two methods give two different answers or one method finds an answer and the other does not. Explain the discrepancy.
+
+
+```{r}
+xi = c()
+yi = c()
+for(i in 1:15) {
+  xi = c(xi, i)
+  yi = c(yi, 1)
+}
+xx = seq(0, 1, length = 1000)
+
+res = Interpolator(xi, yi, xx, Itype = 'NewtonDD')
+#Interpolator(xi, yi, xx, Itype = 'Vandermonde') #Does not find an answer
+```
+
+When we run this code for the points (xi, yi) we get that the Interpolator function returns an answer for the Newton Divided Difference method but not for the Vandermode method. When attempting to solve the matrix using the Vandermonde method we get the following error: "Error in solve.default(V, yi) : system is computationally singular: reciprocal condition number = 2.37358e-22". The reason that this Vandermonde matrix is determined to be singular and thus cannot be solved is because it has a massive condition number and is thus not a stable system. As a result, it cannot be used to solve for the coefficients in the case of the set of points (xi, yi). 
+
+### Problem 2
+
+#### *Note: This is Activity 15*
+
+Here is the function $f(x) = \frac{1}{1+2x}$ on the interval $[0,10]$: 
+```{r}
+f=function(x){1/(1+2*x)}
+a = 0
+b = 10
+xx = seq(a,b,length=1000)
+yf=f(xx)
+plot(xx,yf,type='l',xlab="x",ylab="y",xlim=c(a,b),ylim=c(0,1),col='black',lwd=2)
+```
+
+a) Use 5 evenly spaced nodes on the interval [0,10] to generate a polynomial interpolant $p_{e5}(x)$ of $f(x)$ on this interval (you can again use my `Interpolator` function). Make a plot with the graph of the function $f(x)$ in black, the graph of the interpolating polynomial in blue, and the 5 interpolating points in red.
+
+```{r}
+x1 = seq(0, 10, length=5)
+y1 = f(x1)
+r11 = Interpolator(x1, y1, xx)
+plot(xx,yf,type='l',xlab="x",ylab="y",xlim=c(a,b),ylim=c(0,1),col='black',lwd=2)
+points(x1, y1, col="red")
+lines(xx, r11, type="l", col="blue")
+```
+
+
+b) Repeat part a) with 10 evenly spaced nodes on the interval [0,10].
+
+```{r}
+x2 = seq(0, 10, length=10)
+y2 = f(x2)
+r22 = Interpolator(x2, y2, xx)
+plot(xx,yf,type='l',xlab="x",ylab="y",xlim=c(a,b),ylim=c(0,1),col='black',lwd=2)
+points(x2, y2, col="red")
+lines(xx, r22, type="l", col="blue")
+```
+
+c) Find the zeros of a degree 5 Chebyshev polynomial (shifted and stretched to cover the interval [0,10]). Repeat part a) using these 5 nodes to generate a polynomial interpolant $p_{c5}(x)$ of $f(x)$ on this interval (you can again use my `Interpolator` function).
+
+```{r}
+#zeroX = cheb.zeros(0, 10, 5) #Need to rewrite this since function defined below here
+#zeroX
+a = 0
+b = 10
+n = 5
+zeroX = c()
+for(i in 1:n) {
+  root = ((b-a)/2)*cos(((2*i-1)*pi)/(2*n)) + ((b+a)/2)
+  zeroX = c(zeroX, root)
+}
+
+zeroY = f(zeroX)
+r33 = Interpolator(zeroX, zeroY, xx)
+plot(xx,yf,type='l',xlab="x",ylab="y",xlim=c(a,b),ylim=c(0,1),col='black',lwd=2)
+points(zeroX, zeroY, col="red")
+lines(xx, r33, type="l", col="blue")
+```
+
+
+d) Repeat part c) with the zeros of a degree 10 Chebyshev polynomial.
+
+
+```{r}
+a = 0
+b = 10
+n = 10
+zeroX10 = c()
+for(i in 1:n) {
+  root = ((b-a)/2)*cos(((2*i-1)*pi)/(2*n)) + ((b+a)/2)
+  zeroX10 = c(zeroX10, root)
+}
+
+zeroY10 = f(zeroX10)
+r44 = Interpolator(zeroX10, zeroY10, xx)
+plot(xx,yf,type='l',xlab="x",ylab="y",xlim=c(a,b),ylim=c(0,1),col='black',lwd=2)
+points(zeroX10, zeroY10, col="red")
+lines(xx, r44, type="l", col="blue")
+```
+
+
+e) Compare the errors $||f-p||_{\infty}$ for each of these four approximating polynomials on the interval $[0,10]$. You can approximate these errors by finding the maximum absolute value of the differences between the function and the approximating polynomial on the 1000 evenly spaced points you used to plot the function. Here is an example:
+
+
+```
+err = yf - yc5
+print("Chebyshev Degree 5 Error:")
+print(max(abs(err)))
+```
+
+```{r}
+err5 = yf - r11
+print("Degree 5 Error:")
+print(max(abs(err5)))
+
+err10 = yf - r22
+print("Degree 10 Error:")
+print(max(abs(err10)))
+
+errC5 = yf - r33
+print("Chebyshev Degree 5 Error:")
+print(max(abs(errC5)))
+
+errC10 = yf - r44
+print("Chebyshev Degree 10 Error:")
+print(max(abs(errC10)))
+```
+
+
+
+
+f) Show the errors from parts b) and d) on a single plot. Comment on the plot.
+
+```{r}
+plot(xx,err5,type='l',xlab="x",ylab="y",xlim=c(a,b),ylim=c(-.5,.5),col='black',lwd=2)
+lines(xx, err10, col='red')
+lines(xx, errC10, col='blue')
+lines(xx, errC5, col='green')
+```
+
+g) On a single plot, show the errors from parts b) and d) divided by the function values `yf`. Comment on the plot.
+
+```{r}
+plot(xx,err5/yf,type='l',xlab="x",ylab="y",xlim=c(a,b),ylim=c(-.5,.5),col='black',lwd=2)
+lines(xx, err10/yf, col='red')
+lines(xx, errC10/yf, col='blue')
+lines(xx, errC5/yf, col='green')
+```
+
+### Problem 3
+
+Suppose you are designing a natural log (`ln`) key for a calculator that displays 5 digits to the right of the decimal point. Find the least degree $d$ for which Chebyshev interpolation on the interval $[1,e]$ will always approximate the natural log function to 5 digits of accuracy (i.e., the interpolation error will always be less than $0.5*10^{-5}$)?
+
+Hints: You will need to compute the derivatives of the natural log function, and use the error estimates in both equation (3.14) and Theorem 3.4 of the book.
+
+```{r}
+calcErr = function(a, b, d, x) {
+  n = d+1
+  dfact = 1
+  for(i in 1:d) {
+    dfact = dfact*i
+  }
+  
+  chebyTerm = ((b-a)/2)^n * (1/2^(n-1)) #The Chebyshev error calculation for the various points
+  
+  derivTerm = dfact * (1/x^(d+1)) #The dth derivative of the natural log function, can ignore the -1^(d) in front because we take the absolute value in the theorum
+  
+  total = (chebyTerm * derivTerm) / (dfact*(d+1))
+  
+  return(total)
+}
+```
+
+```{r}
+iterativeErr = function(j, a, b, x) {
+  end = 0.000005
+  for(i in 1:j) {
+    res = calcErr(a, b, i, x) #The resulting upper bound of the error for a given number degree of derivatives
+    if(res <= end) {
+      return(i) #Return's the number of points needed to ensure 5 digits of accuracy
+    }
+  }
+  return(-1)
+}
+```
+
+```{r}
+iterativeErr(15, 1, exp(1), 1)
+```
+
+The least degree for which the chebychev polynomial will always approximate the natural log function to five digits of accuracy is 12. 
+
+### Problem 4
+
+Here is the data from Computer Problem 3.2.3 in the book on total world oil production in millions of barrels per day between 1994 and 2003.
+
+```{r}
+year = seq(1994,2003)
+bbld = c(67.052,68.008,69.803,72.024,73.400,72.063,74.669,74.487,74.065,76.77) 
+print(cbind(year,bbld))
+plot(year,bbld,col='red',pch=20,cex=1.5,ylab="bbl/day(in millions)")
+```
+
+Our objective is to interpolate a function to fit this data and then extrapolate that function to predict the total world oil production in 2010.
+
+a) Generate three different interpolating functions and plot all three functions on the same graph, with a range of 1994 to 2014.:
+
+  * the exact polynomial interpolant (you can use my `Interpolator` function)
+  
+  * a natural cubic spline (you can use `R`'s built-in `splinefun` function with `method="natural"`)
+  
+  * a not-a-knot cubic spline (you can use `R`'s built-in `splinefun` function with `method="fmm"`) 
+  
+```{r}
+xx = seq(1994, 2014, length = 1000)
+exact = Interpolator(year, bbld, xx) 
+
+natCub = splinefun(year, bbld, method='natural')
+y1 = natCub(xx)
+
+fmm = splinefun(year, bbld, method='fmm')
+y2 = fmm(xx)
+
+plot(year,bbld,col='red',pch=20,cex=1.5,ylab="bbl/day(in millions)", xlim = c(1994, 2014), ylim = c(60, 100))
+lines(xx, exact, col="orange")
+lines(xx, y1, col="green")
+lines(xx, y2, col="blue")
+```
+  
+
+b) Compute the three different predicted values for total world oil production in millions of barrels per day in 2010. 
+
+```{r}
+natCub(2010)
+fmm(2010)
+exact[1000]
+```
+
+
+c) *Briefly* state which method you think is the best of the three, and why.
+
+The natural cubic interpolation method seems to be the best of the three interpolation methods. This is because the exact interpolation method is terrible for interpolating data outside of the range of given data points, and the not-a-knot cubic spline seems to scale far more quickly than the actual data points do, making it worse than the natural cubic function.
+
+d) What was the actual total world oil production in 2010?
+
+The actual total world oil production in 2010 was 74.16 millions barrels per day according to indexmundy.com. This implies that none of our models are particularly good.
+
+### Problem 5
+
+In Technical Report 1, we explored numerical differentiation via finite difference approximations. In this question, we are going to explore numerical integration (also called *quadrature*) using ideas we've learned about function approximation and polynomial interpolation. We want to approximate the integral
+$$ \int_a^b f(x) dx.$$
+
+We'll consider three different methods. The main idea behind the first two methods is that we are going to approximate the function $f(\cdot)$ by a polynomial of degree $n-1$ passing through $n$ sampled points of the function. We'll compare two different choices for  the $x$-values of the points: (i) the $n$ roots of the Chebyshev polynomial $T_n(x)$, stretched and shifted to cover the interval $[a,b]$; and (ii) the $x$-values of the $n$ extrema (minima and maxima) of the Chebyshev polynomial $T_{n-1}(x)$, stretched and shifted to cover the interval $[a,b]$. Note that the Chebyshev polynomial $T_n(x)$ has $n+1$ extrema, so that is why we are using  $T_{n-1}(x)$ to find the locations of $n$ extrema.
+
+a) Write two functions `cheb.zeros(a,b,n)` and `cheb.extrema(a,b,n)` that return the desired $x$-values of  $n$ interpolation points for each of these methods. 
+
+Run these commands to test your functions by generating 5 points on the interval $[2,6]$:
+
+```
+cheb.zeros(2,6,5)
+cheb.extrema(2,6,5)
+```
+
+Its outputting four over and over
+
+```{r}
+cheb.zeros = function(a, b, n) {
+  xVals = c()
+  for(i in 1:n) {
+    root = ((b-a)/2)*cos(((2*i-1)*pi)/(2*n)) + ((b+a)/2)
+    xVals = c(xVals, root)
+  }
+  return(xVals)
+}
+
+options(digits=20)
+cheb.zeros(2,6,5)
+```
+
+
+```{r}
+cheb.extrema = function(a, b, n) {
+  xVals = c()
+  for(i in 0:n) {
+    x = ((b-a)/2) * cos((i*pi)/n) + ((b+a)/2)
+    xVals = c(xVals, x)
+  }
+  return(xVals)
+}
+
+cheb.extrema(2, 6, 5)
+```
+
+
+b) I've started a function `cheb.integrate(f,a,b,n,method)` for you that should take a function, an interval, a number of interpolation points, and the method (zeros or extrema), and return an approximation of the definite integral $\int_a^b f(x) dx$. After calling your functions from part (a) to get the interpolation points, you need to (i) compute the coefficients of the interpolating polynomial, and (ii) use the coefficients to compute the integral of the interpolating polynomial over the interval $[a,b]$. For the first part of the task, you are allowed to use the Vandermonde matrix. Even though it is not particularly scalable and it would be better to use Newton's divided differences, it is more straightforward to code the interpolation with the Vandermonde matrix. 
+
+As an aside, in practice, neither the Vandermonde or Newton's divided difference methods are used. Rather, the integral is approximated by the sum $\sum_{i=0}^{n-1} w_i f(x_i)$, where the $w_i$'s are some weights that can be calculated ahead of time in a fast manner. 
+
+For the second part of the task, you should use your calculus knowledge about the closed form of an integral of a polynomial over an interval.
+
+
+```{r}
+cheb.integrate=function(f,a,b,n,method='extrema'){
+  if(method=='extrema'){
+    x=cheb.extrema(a,b,n)
+  }
+  else if(method=='zeros'){
+    x=cheb.zeros(a,b,n)
+  }
+  else{stop('Uknown method')}
+
+  # Fill in your code here to (i) find the coefficients of interpolating polynomial and (ii) use them to compute the integral of the interpolating polynomial over the interval [a,b]
+  # Hint: my code here is 4 lines
+
+  vand = VMI(x, f(x))
+  vandInt = vand$interpolant
+  nf = integrate(vandInt, a, b)
+  return(nf$value)
+}
+```
+
+Test your code on $\int_{-1}^2 x^2~dx$ with 5 points:
+```{r}
+f=function(x){x^2}
+cheb.integrate(f,-1,2,5,method='extrema')
+cheb.integrate(f,-1,2,5,method='zeros')
+```
+
+c) In the third method, called Simpson's Rule, we take $n$ evenly spaced points ($n$ should be an odd integer), with the first equal to $a$ and the last equal to $b$. Then we create a quadratic spline, with one quadratic function fit through the points $x_0$, $x_1$, and $x_2$, the next fit through the points $x_2$, $x_3$, and $x_4$, and so forth. The figure below, which is from http://tutorial.math.lamar.edu/Classes/CalcII/ApproximatingDefIntegrals.aspx, shows a picture demonstrating this process with $n=7$.
+
+
+Note that the black lines on top of the shaded areas are the quadratic functions passing through three points of the red function, which is the function we are approximating. The first quadratic goes through the points $(x_0,f(x_0))$, $(x_1,f(x_1))$, and $(x_2,f(x_2))$, and the area under it is shaded in green. The second quadratic goes through the points $(x_2,f(x_2))$, $(x_3,f(x_3))$, and $(x_4,f(x_4))$, and the area under it is shaded in beige. The third quadratic (the easiest to recognize as a quadratic) goes through the points $(x_4,f(x_4))$, $(x_5,f(x_5))$, and $(x_6,f(x_6))$, and the area under it is shaded in blue.  The integral $\int_{x_0}^{x_6} f(x) dx$ is approximated by the sum of the green, beige, and blue areas.
+
+Using the Lagrange form of the interpolating quadratic between the first three points, we have
+$$ p_1(x)=f(x_0)\frac{(x-x_1)(x-x_2)}{(x_0-x_1)(x_0-x_2)}+f(x_1)\frac{(x-x_0)(x-x_2)}{(x_1-x_0)(x_1-x_2)}+f(x_2)\frac{(x-x_0)(x-x_1)}{(x_2-x_0)(x_2-x_1)}.$$
+
+If we let $h=x_{i+1}-x_{i}$ (the distance between any two of the evenly spaced points), then this becomes
+$$ p_1(x)=f(x_0)\frac{(x-x_1)(x-x_2)}{2h^2}-f(x_1)\frac{(x-x_0)(x-x_2)}{h^2}+f(x_2)\frac{(x-x_0)(x-x_1)}{2h^2},$$
+
+and 
+
+\begin{align*}
+\int_{x_0}^{x_2}p_1(x)dx&=\frac{f(x_0)}{2h^2}\int_{x_0}^{x_2}(x-x_1)(x-x_2)dx-\frac{f(x_1)}{h^2}\int_{x_0}^{x_2}(x-x_0)(x-x_2)dx+\frac{f(x_2)}{2h^2}\int_{x_0}^{x_2}(x-x_0)(x-x_1)dx\\
+&=\frac{h}{3}f(x_0)  + \frac{4h}{3}f(x_1)+\frac{h}{3}f(x_2) \\
+&= \frac{h}{3}\left[f(x_0)+4f(x_1)+f(x_2)\right].
+\end{align*}
+
+So to approximate the integral, we can sum over each of the $\frac{n-1}{2}$ quadratic segments:
+
+$$
+\int_{a}^{b}f(x)dx \approx \sum_{k=1}^{\frac{n-1}{2}} \int_{x_{2(k-1)}}^{x_{2k}}p_k(x)dx=
+\sum_{k=1}^{\frac{n-1}{2}} \frac{h}{3}\left[f(x_{2(k-1)})+4f(x_{2k-1})+f(x_{2k})\right],
+$$
+
+where $k$ indexes the quadratic segments. Note that the right-hand side is just a linear combination of the function values at the $n$ evenly spaced points! 
+
+Implement a function `simpson.integrate` that takes a function $f$, an interval $[a,b]$, and an odd number of points $n$, and approximates $\int_{a}^{b}f(x)dx$ by the sum on the right-hand side of the most recent equation above. 
+
+```{r}
+simpson.integrate=function(f,a,b,n){
+if(n%%2==0)
+  stop('n must be odd')
+# fill in the rest of the function here
+  x = seq(a, b, length=n)
+  h = x[2]-x[1]
+  vals = f(x)
+
+  total = 0
+  for(k in 1:((n-1)/2)) {
+    total = total + (h/3) * (vals[1+2*(k-1)] + 4*vals[2+2*(k-1)] + vals[3+2*(k-1)])
+  }
+  return(total)
+}
+```
+
+Test your `simpson.integrate` code on the integral $\int_0^1 x^{1.5}dx$, with $n=7$ points (i.e., an approximation comprised of three quadratic functions concatenated):
+
+```{r}
+g=function(x){x^1.5}
+simpson.integrate(g,0,1,7)
+```
+
+
+d) For any good numerical integration method, the magnitude of the error between the actual definite integral value and the approximation should decrease as the number of integration points/sub-intervals you use for the approximation increases.
+Here is a function to plot the magnitudes of the errors for different values of $n$ and for each of the three methods you implemented above. The parameter `correct` is the actual value of the integral of $f$ over the interval $[a,b]$. You can compute this analytically by hand (woohoo!) or using Wolfram Alpha.
+
+```{r}
+integration.test=function(f,a,b,max.n,correct){
+  nn.odd=seq(3,max.n,by=2)
+  nn=2:max.n
+  
+  # Compute the errors
+  # Note: I added machine epsilon to all errors so that the plots will still work if the actual error is exactly equal to 0
+  errors.zeros=rep(NA,length(nn))
+  errors.extrema=rep(NA,length(nn))
+  errors.simpson=rep(NA,length(nn.odd))
+  for (i in 1:length(nn)){
+    errors.zeros[i]=abs(cheb.integrate(f,a,b,nn[i],method='zeros')-correct)+.Machine$double.eps
+    errors.extrema[i]=abs(cheb.integrate(f,a,b,nn[i],method='extrema')-correct)+.Machine$double.eps
+  }
+  for (i in 1:length(nn.odd)){
+    errors.simpson[i]=abs(simpson.integrate(f,a,b,nn.odd[i])-correct)+.Machine$double.eps
+  }
+  
+  # Plot the error magnitudes
+ plot(nn,errors.zeros,log="y",type="l",lwd=3,col="blue",xlab="n",ylab="Error Magnitude",ylim=range(errors.zeros,errors.extrema,errors.simpson))
+  points(nn,errors.zeros,log="y",pch=19,col="blue",)
+  lines(nn,errors.extrema,log="y",type="l",lwd=3,col="DodgerBlue")
+  points(nn,errors.extrema,log="y", pch=19,col="DodgerBlue",)
+  lines(nn.odd,errors.simpson,log="y",type="l",lwd=3,col="DarkOrange")
+  points(nn.odd,errors.simpson,log="y",pch=19,col="DarkOrange")
+  grid()
+  legend("topright",legend=c("Chebyshev Zeros", "Chebyshev Extrema", "Simpson's Method"),col=c("blue","DodgerBlue","DarkOrange"),bg="white",lwd=2)
+}
+```
+
+Here is an example:
+
+```{r}
+g=function(x){cos(2*pi*x)+cos(6*pi*x)}
+xx=seq(0,.75,length=1000)
+plot(xx,g(xx),type='l',lwd=3,col="red",xlab="x",ylab="g(x)")
+integration.test(g,0,.75,18,-1/(3*pi))
+```
+
+Choose some integrals that are interesting to you and test out the performance of the three methods. How do they compare? Is one always the best? Try it for a function that is not as smooth. How does the smoothness affect the convergence? Do you run into computational problems if you try to make $n$ too large? If so, this is due to our use of the Vandermonde instead of the more efficient implementation discussed in the footnote above. You do not have to answer all of these questions comprehensively. I just want you to try a few examples to provoke some thought about the different methods, as well as to double check that your code is working correctly.
+
+
+```{r}
+g=function(x){2432902008176640000 - 8752948036761600000*x + 13803759753640704000*x^2 - 
+    12870931245150988800*x^3 + 8037811822645051776*x^4 - 3599979517947607200*x^5  + 
+    1206647803780373360*x^6 - 311333643161390640*x^7 + 63030812099294896*x^8 - 
+    10142299865511450*x^9 + 1307535010540395*x^10 - 135585182899530*x^11 + 
+    11310276995381*x^12 - 756111184500*x^13 + 40171771630*x^14 -1672280820*x^15 + 
+    53327946*x^16 - 1256850*x^17 + 20615*x^18 - 210*x^19 + x^20}
+integral = integrate(g, -1, 1)
+xx=seq(0,.75,length=1000)
+plot(xx,g(xx),type='l',lwd=3,col="red",xlab="x",ylab="g(x)")
+integration.test(g,0,.75,18,integral$value)
+```
+
+```{r}
+g=function(x){cos(10*pi*x^20)}
+integral = integrate(g, -1, 1)
+xx=seq(0,.75,length=1000)
+plot(xx,g(xx),type='l',lwd=3,col="red",xlab="x",ylab="g(x)")
+integration.test(g,0,.75,18,integral$value)
+```
+
+```{r}
+g=function(x){abs(x)}
+integral = integrate(g, -1, 1)
+xx=seq(0,.75,length=1000)
+plot(xx,g(xx),type='l',lwd=3,col="red",xlab="x",ylab="g(x)")
+integration.test(g,0,.75,18,integral$value)
+```
+
+```{r}
+g=function(x){exp(x)}
+integral = integrate(g, -1, 1)
+xx=seq(0,.75,length=1000)
+plot(xx,g(xx),type='l',lwd=3,col="red",xlab="x",ylab="g(x)")
+integration.test(g,0,.75,18,integral$value)
+```
+
+Both of the Chebyshev integration methods appear to be almost equal, except the Chebyshev extrema seems to converge slightly faster than the Chebyshev zeros function. As far as differences in the functions, both the Chebyshev  functions seem to converge faster for less smooth functions than Simpson's method, as Simpson's converges slower than both Chebyshev functions for cos functions. However, for both functions approaching an asymptote and non smooth functions such as abs(x) Simpson's appears to converge faster. Lastly, making large values of n does cause computational problems due to the inefficiency of the Vandermonde solution.
+
+### Problem 6: Reflection on Technical Report 2
+
+Please fill out the following [Technical Report Reflection Form ](https://drive.google.com/file/d/1xn2JykJPtHj_Xy1cg3NvNZ2FpB5MZtk3/view?usp=sharing) for TR2, and attach it to your homework. I would like the reflection to be detachable from your homework assignment. 

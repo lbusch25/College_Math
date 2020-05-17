@@ -1,0 +1,168 @@
+# Math 365 / Comp 365: Activity 19: Orthogonal Polynomials
+
+Until now, to approximate a continuous function $g$ on an interval $[a,b]$ by a polynomial, we've discretized the function by evaluating it at certain points and used the discrete framework (a system of equations) to find the interpolating or least squares polynomial for those discrete points. From those coefficients, we can construct a *continuous* polynomial approximation to $g$ on $[a,b]$.
+The resulting set of polynomial coefficients and therefore the resulting continuous approximation is dependent on the number of and choice of the discrete points (e.g., evenly spaced points, zeros of shifted Chebyshev polynomial) and the method of approximation (e.g. polynomial interpolation through all the points, cubic splines, Bezier curves, least squares).
+
+Another option is to stay in the continuous world, and try to approximate the function $g$ on $[a,b]$ directly by a continuous polynomial. To decide which is the best approximation however, we need some way to measure the distance between the function $g$ and some approximation of it.
+
+First, you can check that the space of all continuous functions on $[a,b]$ is a vector space. It satisfies all of the axioms of a vector space, like associativity, commutativity, distributivity, an identity element of multiplication (the function that is constant and equal to 1), an identity element of addition (the function that is constant and equal to 0), a scalar multiplication identity element (1), and so forth. You will often see this space denoted ${\cal C}([a,b])$.
+
+Next, we need to equip this vector space with an inner product to turn it into an *inner product space*. One reasonable choice of inner product is
+
+$$\langle f,g \rangle = \int_{a}^{b}f(x) g(x)dx. $$
+
+Then the length of any vector in the space (i.e., any continuous function $f$ on $[a,b]$) is $||f||=\sqrt{\langle f,f \rangle}$. You could check that this definition of a norm satisfies all of the necessary properties (most notably the triangle inequality). You can also use this inner product to compute angles between functions in the normal way. Most importantly for us, this gives us a way to measure the distance between two function: $||f-g||$. We'll use this distance to decide for example whether $f_1$ or $f_2$ is a better approximation of $g$.
+
+Throughout this activity, we will take the interval $[a,b]$ to be $[-1,1]$.
+
+## Part I: Gram-Schmidt Orthogonalization, Polynomial Style
+
+a) Recall that the angle between two vectors in a vector space is given by
+$$\theta=\arccos \left(\frac{\langle f, g \rangle}{||f||\cdot||g||} \right), $$
+where $||f||=\sqrt{\langle f, f \rangle}$. Find the angle between the functions $f_1(x)=x$ and $f_3(x)=x^3$ (in degrees, not radians). Are these two functions orthogonal with this notion of inner product?
+
+```{r}
+#compute the norm of f
+f = function(x){x^2} #actually f^2
+integrate(f, -1, 1)
+sqrt(2/3)
+
+#Compute norm of g
+g = function(x){x^6} #actually g^2
+integrate(g, -1, 1)
+sqrt(0.28571428571428569843) 
+
+fg = function(x){x^4}
+integrate(fg, -1, 1)
+
+acos(.4000000000000000222 / (0.81649658092772603446*0.53452248382484879308))
+```
+
+
+
+b) Compute $||f_1||$. Normalize $f_1$ to be a vector of length 1 (i.e., find $g_1=\alpha f_1$ for some $\alpha \in \mathbb{R}$ and check that $\langle g_1,g_1 \rangle =1$).
+
+We can normalize $f_1$ by dividing by the norm of $f_1$.
+
+```{r}
+g1 = function(x){x/sqrt(2/3)}
+g1sqrd = function(x){(3/2)*x^2}
+
+integrate(g1sqrd, -1, 1) #Computes the norm
+```
+
+So g1 * g1 is 1, so it is normalized.
+
+c) The four monomial functions 
+$$f_0(x)=1,\quad f_1(x)=x,\quad f_2(x)=x^2,\quad \hbox{and}\quad f_3(x)=x^3$$
+form a basis for the space ${\cal P}_3$ of all degree 3 polynomials. However, as seen in part (a), these four functions are not orthogonal in this inner product space. Apply the Gram-Schmidt orthonormalization process to $\{f_0,f_1,f_2,f_3\}$ to find a set of four functions that form an orthonormal basis for ${\cal P}_3$. To do so, follow the same procedure as with vectors in $\mathbb{R}^m$: Given $p_0, p_1, \ldots p_n$ find orthonormal polynomials $q_0, q_1, \ldots q_n$ by
+
+$$
+\begin{align*}
+q_0(x)& =\frac{p_0}{||p_0||}\\
+\hat{p}_1(x)& =p_1 - \frac{\langle p_1,q_0 \rangle }{\langle q_0,q_0 \rangle }q_0\\
+q_1(x)& = \frac{\hat{p}_1}{||\hat{p}_1||} \\
+\hat{p}_1(x)& =p_2 - \frac{\langle p_2,q_0 \rangle }{\langle q_0,q_0 \rangle}q_0-\frac{\langle p_2,q_1 \rangle }{\langle q_1,q_1 \rangle}q_1\\
+q_2(x)& = \frac{\hat{p}_2}{||\hat{p}_2||} \\
+\hat{p}_3(x)& =p_3 - \frac{\langle p_3,q_0 \rangle }{\langle q_0,q_0 \rangle}q_0- \frac{\langle p_3,q_1 \rangle }{\langle q_1,q_1 \rangle}q_1- \frac{\langle p_3,q_2 \rangle }{\langle q_2,q_2 \rangle}q_2\\
+q_3(x)& = \frac{\hat{p}_3}{||\hat{p}_3||} \\
+\vdots&
+\end{align*}
+$$
+
+```{r}
+```
+
+
+Note: if you feel comfortable with the process, you can stop after the first three, which give an orthonormal basis for ${\cal P}_2$.
+
+## Part II: The Legendre Polynomials
+
+The *Legendre polynomials* are defined on the interval $[-1,1]$ as:
+
+$$ {\ell}_{n}(x) = \frac{(-1)^n}{2^n n!} \frac{d^n}{dx^n}\left\{(1-x^2)^n \right\},~~~n=1,2,\ldots $$
+
+Let's switch the indexing so that they start at $n=0$ instead of 1. We can define $p_n(x)={\ell}_{n-1}(x)$, so that the first few Legendre polynomials are
+$$
+\begin{align*}
+p_0(x)&=1 \\
+p_1(x)&=x \\
+p_2(x)&=\frac{1}{2} (3x^2-1) \\
+p_3(x)&=\frac{1}{2} (5x^3-3x) \\
+p_4(x)&=\frac{1}{8}(35x^4-30x^2+3).
+\end{align*}
+$$
+
+a) Show that $\langle p_0, p_2 \rangle = 0$, implying that $p_0$ and $p_2$ are orthogonal polynomials in this inner product space. Similar calculations would in fact show that all of the Legendre polynomials are orthogonal to each other.
+
+However, the Legendre polynomials do not have length 1 (revisit your answer to Part Ib), so you could normalize them one by one by letting 
+$$q_i=\frac{p_i}{||p_i||}=\frac{p_i}{\sqrt{\langle p_i, p_i \rangle}}.$$
+The first few are
+$$
+\begin{align*}
+q_0(x)&=\frac{1}{\sqrt{2}} \\
+q_1(x)&=\sqrt{\frac{3}{2}}x \\
+q_2(x)&=\sqrt{\frac{5}{8}} (3x^2-1) \\
+q_3(x)&=\sqrt{\frac{7}{8}} (5x^3-3x) 
+\end{align*}
+$$
+
+Note that the first $n+1$ normalized Legendre polynomials $\{q_0, q_1, \ldots, q_{n}\}$ comprise an orthonormal basis for ${\cal P}_n$, the vector space of all degree $n$ polynomials of the form $p(x)=c_0+c_1 x + \ldots c_{n} x^n$.
+
+(b) Check that your answer from Part Ic (the result of the Gram-Schmidt orthonormalization of the monomials) matches the normalized Legendre polynomials. So if you didn't know the crazy formula at the beginning of Part II for the Legendre polynomial, you could just start with the monomials and orthonormalize them. Cool!! 
+
+## Part III: Analysis
+
+When we were doing polynomial interpolation back in Chapter 3, we discussed different bases for polynomials of degree $n$. We said that the Vandermonde matrix is constructed from the basis of monomials ($1, x, x^2, \ldots$); Lagrange interpolation used the fundamental polynomials 
+
+$$ L_i(x) = \prod_{j \neq i} \left(\frac{x-x_j}{x_i-x_j} \right),~~i=1,2,\ldots n+1 $$
+
+as a basis; and Newton's divided difference method used the set of basis functions:
+
+$$ \pi_i(x) = \begin{cases}
+1, & i=1 \\
+(x-x_1)(x-x_2)\cdots(x-x_{i-1}), &i=2,3,\ldots,n+1
+\end{cases},$$
+
+which had the nice properties that the resulting set of equations were upper triangular, and therefore easier to solve.
+
+It turns out there is a very useful theorem that works for any "vector", including polynomials!.
+
+**Theorem:** For an orthonormal basis $\{u_1,\ldots,u_n\}$, any vector $v$ can be expressed as $v=\displaystyle{\sum_i \langle v, u_i\rangle u_i}.$
+
+Now we have a new orthonormal basis for degree $n$ polynomials, and we can try 
+representating degree $n$ polynomials as linear combinations of the first $n+1$ normalized Legendre polynomials $q_0, q_1, \ldots, q_n$. This is easy with the above useful theorem! 
+
+a) Find $a_0, a_1$, and $a_2$ so that 
+$$ g(x)=x^2+2x-3=a_0 q_0(x) + a_1 q_1(x) +a_2 q_2(x). $$
+
+Note: there is nothing special about this choice of $g$; I just picked some quadratic function.
+
+b) Given a general quadratic function $g(x)$ on the interval $[-1,1]$, how can we find $a_0, a_1$, and $a_2$ so that 
+$$ g(x)=a_0 q_0(x) + a_1 q_1(x) +a_2 q_2(x)? $$
+
+## Part IV: Least Squares with Orthonormal Polynomials
+
+Given some vector $g$ in a vector space ${\cal V}$ and some subspace ${\cal S}$ of the vector space ${\cal V}$, the least squares problem is to find the vector $\hat{g} \in {\cal S}$ that is closest to $g$; that is, 
+$$\hat{g} = \mbox{argmin}_{f \in {\cal S}} \left\{||g-f||^2 \right\}.$$
+
+In our previous work, the vector space ${\cal V}$ was $\mathbb{R}^m$ and we called the vector $g$ by $b$; the norm used to measure "closest" was the Euclidean 2-norm; the subspace ${\cal S}$ was the column space of $A$ for some matrix $A$; and we denoted the vector in ${\cal S}$ that is closest to $b$ by $\hat{b}$. In our new inner product space of continuous functions, ${\cal V}={\cal C}([a,b])$, ${\cal S}$ is some subspace of functions (often the space of polynomials of a given degree), and the squared error to be minimized is
+$$||g-f||^2=\langle g-f, g-f \rangle =\int_a^b [g(x)-f(x)]^2~dx.$$
+The rest of the main ideas are exactly the same. The solution is still an orthogonal projection of $g$ onto ${\cal S}$, which you know how to do if you have an orthonormal basis for ${\cal S}$.
+
+a) Let $g(x)=x^2+2x-3$ (the same quadratic function we used in Part IIIa). Find the least squares polynomial approximation of degree 1 (i.e., a line) to the function $g(x)$ on the interval $[-1,1]$. That is, find 
+$$ \hat{g}=\mbox{argmin}_{f \in {\cal P}_1} \left\{||g-f||^2 \right\}=\mbox{argmin}_{f \in {\cal P}_1} \left\{\int_{-1}^1 [g(x)-f(x)]^2 \right\}.$$
+
+- Hint 1: The best fit line is NOT simply $2x-3$, the lower order terms of $g(x)$. This is because the basis of monomials are NOT orthonormal!
+
+- Hint 2: You should be able to find the answer without doing any additional computations beyond what you've already done for Part III.
+
+b) Let $h(x)=\cos\left(\frac{\pi}{2}x^2+\pi x\right)$. Here is a plot of $h(\cdot)$ on the interval $[-1,1]$:
+```{r}
+x=seq(-1,1,length=1000)
+plot(x,cos(pi/2*x^2+pi*x),type='l',lwd=3)
+```
+
+Find 
+$$ \hat{h}=\mbox{argmin}_{f \in {\cal P}_3} \left\{\int_{-1}^1 [h(x)-f(x)]^2 \right\}, $$
+and plot $\hat{h}(\cdot)$ on the same graph as $h(\cdot)$ on the interval $[-1,1]$. Hint: feel free to use R or Wolfram Alpha to compute integrals.

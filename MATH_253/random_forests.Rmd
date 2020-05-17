@@ -1,0 +1,174 @@
+---
+title: "Random Forests and Bagging"
+author: "Lawson Busch"
+date: "11/15/2018"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+# Data and Libraries
+
+```{r warning = FALSE, message = FALSE}
+library(gridExtra)
+library(ggplot2)
+library(dplyr)
+library(rpart)
+library(randomForest)
+
+land <- read.csv("https://www.macalester.edu/~ajohns24/data/land_cover.csv")
+table(land$class)
+## 
+##  asphalt  building       car  concrete     grass      pool    shadow  
+##        59       122        36       116       112        29        61 
+##     soil      tree  
+##        34       106
+```
+
+# Experiment Part 1
+
+## Resample 1
+
+```{r}
+set.seed(2000)
+re_land <- sample_n(land, nrow(land), replace = TRUE)
+
+re_tree <- rpart(class ~ ., re_land, cp = -1)
+
+plot(re_tree, margin = 0.2)
+text(re_tree, cex = 0.8)
+
+predict(re_tree, newdata = land[2,], type = "class") #Tis concrete
+```
+
+
+## Resample 2
+
+```{r}
+set.seed(1)
+re_land <- sample_n(land, nrow(land), replace = TRUE)
+
+re_tree <- rpart(class ~ ., re_land, cp = -1)
+
+plot(re_tree, margin = 0.2)
+text(re_tree, cex = 0.8)
+
+predict(re_tree, newdata = land[2,], type = "class") #Tis a building, but should be concrete
+```
+
+These trees do not look similar, in fact they are different. The predictors are different too. This results in a different classification.
+
+## Brainstorm
+
+We could make a bunch of trees (a forest) and figure out which is the best! Or use the predictions from all trees in the forest to classify the thing! 
+
+# Experiment Part 2
+
+## 100 Resamples
+
+```{r}
+set.seed(1)
+
+# Initialize
+classes <- rep(0,100)
+
+# Loop
+for(i in 0:100){
+    # Take a resample
+    re_land <- sample_n(land, nrow(land), replace = TRUE)
+
+    # Construct a tree
+    re_tree <- rpart(class ~ ., re_land, cp = -1)
+
+    # Make and store a prediction
+    classes[i] = levels(land$class)[predict(re_tree, newdata = land[2,], type = "class")]
+}
+```
+
+## 100 Tree Classification
+
+```{r}
+class_preds <- data.frame(Class = classes)
+prediction <- class_preds %>%
+  group_by(Class) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count))
+
+head(prediction)
+```
+
+From the above we can see that our prediction using 100 trees is concrete!
+
+## Baggin in RStudio
+
+Note, random forests are good because they decorrelate all of our trees from the different predictors.
+
+### A)
+
+```{r}
+# set the seed
+set.seed(200)
+
+# obtain a bagged classification
+bagging_R <- randomForest(class ~ ., land, ntree = 100, mtry = 147)
+#ntree = number of trees
+#mtry = number of predictors to use (all 147 in this case)
+```
+
+```{r}
+print(bagging_R)
+```
+
+The 00B error rate is 13.78%.
+
+## Forests VS Bagging
+
+Random forests decorrelate the data of our predictors from the trees, making it a better algorithm than bagging. They also are computationally for efficient since they make smaller trees than bagging.
+
+## Forests In RStudio
+
+### A)
+
+sqrt(147) = 12
+
+### B)
+
+To construct a 100 tree forest:
+```{r}
+# set the seed
+set.seed(200)
+
+# obtain a forest
+forest_R <- randomForest(class ~ ., land, ntree = 100, mtry = sqrt(147)) #Note, if we leave out this mtry section, it will defaut to the sqrt of our number of predictors
+```
+
+### C)
+
+```{r}
+print(forest_R)
+```
+
+The 00B estimate of error rate is 13.78%. This is the exact same as the bagging error rate.
+
+### D)
+
+This gets the most important predictors by calculating their gini_index:
+
+```{r}
+# unarranged
+forest_R$importance
+
+# arranged
+data.frame(names = row.names(forest_R$importance), forest_R$importance) %>% 
+    arrange(desc(MeanDecreaseGini))
+```
+
+From this we can see that the most important predictor is NDVI, and the least important is BrdIndx.
+
+### E)
+
+```{r}
+ggplot(land, aes(x=NDVI, y=class, color=class)) + geom_point()
+```
+

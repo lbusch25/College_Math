@@ -1,0 +1,124 @@
+---
+title: "Team Project 1"
+author: "Lawson Busch, Raven McKnight, Ximena Silva-Avila"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+```{r}
+library(dplyr)
+library(ggplot2)
+library(ggmap)
+library(fivethirtyeight)
+library(reshape2)
+data(hate_crimes)
+?hate_crimes
+
+hate_crimes <- data.frame(hate_crimes)
+hate_crimes <- hate_crimes %>%
+  mutate(pre_election = avg_hatecrimes_per_100k_fbi, post_election = hate_crimes_per_100k_splc)
+```
+
+
+# Part 1: First Impressions
+
+At Macalester and beyond, many have felt a shift in the political climate since the 2016 election of Donald Trump. From anti-Semitic symbols carved on campus to the recent confirmation of Brett Kavanaugh to the Supreme Court, hate feels more salient than ever. 
+
+There is some data to support the *feeling* that hate has become more prevalent. In the five years precedding 2016, the FBI has records of approximately 16 hate crimes per day. The Southern Poverty Law Center reports *90* hate crimes per day in the ten days following the election. These statistics may be skewed due to collection via self-reporting and other factors, however, they can shed light on recent trends. The maps below illustrate the rate of hate crimes across the United States before and after the election, demonstrating a clear change in hate crime rates after the election.
+
+```{r}
+library(choroplethr)
+hate_crimes_fbi <- hate_crimes %>%
+ mutate(value = pre_election, region = tolower(state))
+
+hate_crimes_fbi[is.na(hate_crimes_fbi)] = as.numeric(0)
+
+state_choropleth(hate_crimes_fbi, title = "Hate Crimes per 100,000 Residents Pre-Election")
+
+hate_crimes_splc <- hate_crimes %>%
+ mutate(value = post_election, region = tolower(state))
+
+hate_crimes_splc[is.na(hate_crimes_splc)] = as.numeric(0)
+
+state_choropleth(hate_crimes_splc, title = "Hate Crimes per 100,000 Residents Post-Election")
+```
+
+In this report, we attempt to model post-election crimes rates, controlling for pre-election crime rates. Before attemping to fit a model, we explore trends in the data to illustrate which predictors may be worth exploring. We created a correlation matrix to identify which predictors were highly correlated with post-election hate crimes. 
+
+First, we examine the trend between pre- and post-election hate crimes. We removed the District of Colombia from our visualizations because it was a consistent outlier. The trends illustrated are easier to identify with DC removed. 
+```{r}
+hate_crimes_outlier <- hate_crimes %>%
+  filter(state != "District of Columbia")
+ggplot(hate_crimes_outlier) +
+  geom_point(aes(x=pre_election, y=post_election))
+```
+
+As anticipated, this relationship was positve. The higher the rates of hate crimes were in a state before the election, the higher they are now. This relationship is crucial to keep in mind as we continue in our analysis. Perhaps the most obvious relationship we explored was between the percent of the vote Trump got in each state with its post-election crime rates. 
+
+```{r}
+ggplot(hate_crimes_outlier) +
+  geom_jitter(aes(x=share_vote_trump, y=post_election, color=pre_election))
+```
+
+We were surprised that the rate of post-election hate crimes tends to be lower in states with higher shares of Trump voters. However, it's important to note that this visualization does not control for *pre*-election hate crimes. The shading of the individual points according to pre-election crime gives us some intuition into how this may affect the post-election crime, though these relationships will become more clear once we fit a model. 
+
+Two other predictors we chose to model were the share of non-citizens in a state, based on Trump's particular rhetoric regarding immigration, and median household income, as we considered it a potential proxy for income inequality & accompanying issues. 
+
+```{r}
+ggplot(hate_crimes_outlier) +
+  geom_jitter(aes(x=share_non_citizen, y=post_election, color=pre_election))
+```
+
+Here, we see a slight positive correlation - though not as strong as we expected. 
+
+```{r}
+ggplot(hate_crimes_outlier) +
+  geom_jitter(aes(x=median_house_inc, y=post_election, color=pre_election))
+```
+
+This relationship suprised us. We expected to see a decrease in hate crimes as income increase but saw the opposite. Once again, it's important to remember that these visualizations do not control for pre-election hate crimes. With this in mind, we can move on to the modelling portion of our analysis to better understand these difficult to visualize trends. 
+
+# Part 2: Build and Evaluate a Model
+Our goal is to create a model which explains as much of the variation in post-election hate crimes as possible. We also want to keep our model relatively simplistic - ie, use a small number of predictors - to prevent overfitting or overcomplicating our analysis. 
+
+As mentioned previously, it's important for us to control for the pre-election hate crimes in our model. This variable is *the* greatest predictor for post-election hate crime; not controlling for it would produce uninformed and misleading models. To control for pre-election hate crimes, we will include it as a predictor in our model. 
+
+To determine which other predictors to include, we ran back-step subset selection, best subset selection, and LASSO regularization to explore which predictors were most useful in explaining post-election hate crimes. We found that the percent of non-citizens, the percent of Trump voters, and the percent of high school educated aults were deemed significant predictors by all three model-building processes. 
+
+We toyed with including and excluding several variables, including median househould income and percent of non-citizens. We found that share of high school educated adults had a very small coefficient and contributed little to the $R^2$ of our model. 
+The model we chose to use includes only the percent of non-citizens and the percent of Trump voters per state to predict post-election hate crimes. A summary table for this model can be seen below. 
+
+```{r}
+final_mod <- lm(post_election ~ pre_election + share_vote_trump +
+                 share_non_citizen, data = hate_crimes)
+summary(final_mod)
+```
+Our model:
+$$post \text{_}election = 0.69 + 0.08*pre \text{_}election-1.03*share \text{_}vote \text{_}trump - 1.74*share\text{_}non\text{_}citizen$$
+
+Our model has an $R^2$ of 0.687, meaning it explains 68.7% of variation in post-election hate crimes. Additionally, it is simple enough to interpret easily - a 1 percentage point increase in share of Trump voters causes a decrease by a factor of -1.032 in post-election hate crime rates (holding pre-election hate crime rates and share_vote_trump constant). Similarly, a 1 percentage point increase in the percent of non-citizens leads to a decrease in post-election hate crime rates by a factor of -1.74 (holding all other predictors constant) and a 1 percentage point increase in the pre-election hate crime rates leads to an increase in the post-election hate crime rates by a factor of 0.08 (holding all other predictors constant).
+
+# Part 3: Final Impressions
+
+There are a few major take aways from our model. The first being that by far the best predictor of post-election hate crime rates is pre-election hate crime rates. That is to say that a state with a high pre-election hate crime rate was likely to have a high post-election hate crime rate. However, once we control for the pre-election hate crime rates, we see that both share_vote_trump and share_non_citizen are statisically significant predictors for post-election hate crime rates. Shockingly, both of these predictors display a negative correlation with post-election hate crime rates, showing that states with higher values for share_vote_trump and share_non_citizen actually had lower post-election hate crime rates. 
+
+To demonstrate these takeaways, we have included the data for three states that show the trends found in our model, Tennessee, Arizona, and Minnesota:
+
+```{r}
+MN_TN_AZ <- hate_crimes %>%
+  filter(state == "Arizona" | state == "Tennessee" | state == "Minnesota") %>%
+  #mutate(pre_hate_100k = avg_hatecrimes_per_100k_fbi, post_hate_100k = hate_crimes_per_100k_splc) %>%
+  select(state, share_non_citizen, share_vote_trump, pre_election, post_election) %>%
+  arrange(desc(pre_election))
+
+head(MN_TN_AZ)
+```
+
+From these three data points, we can see that the pre-election hate crimes rate is a good indicator of the post-election hate crimes rate. The state with highest pre-election hate crime rate, Minnesota, also has the highest post-election hate crime rate, and the state with the lowest pre-election hate crime rate, Tennessee, has the lowest post-election hate crime rate.
+
+Similarly, we can see that the higher the share_vote_trump value for a state, the lower the post-election hate crime rate, as the ascending order of our state's share_vote_trump value corresponds exactly with the descending order of the post-election hate crimes rate. Lastly, we can see the negatice correlation of the share_non_citizen percentage when looking at Arizona and Minnesota. Arizona and Minnesota have similar pre-election hate crime rates and share_vote_trump, but Arizona has a relatively much higher share_non_citizen. As our model predicts, Arizona also has a much lower post-election hate crime rate than Minnesota.
+
+Our findings do not match the findings in the fivethirtyeight article, but that is not surprising because we are answering a different question than the fivethirteight article. The article tackles the question of what socio-economic factors are good predictors for hate crime rates, and uses the pre-election and post-election data sets as different data sets to build and test their model. Thus, they are not specifically looking at the relationship of pre-election hate crimes to post-election hate crimes, but predicting hate crime rates in general.
+
+The question that we attempt to answer is what explains the change in hate crime rates after the election of Donald Trump, when controlling for pre-election hate crime rates. In other words, we are looking at the specific relationship between pre-election and post-election hate crime rates. As a result, we do not treat the pre-election hate crimes data as a different data set for the purpose of building our model, but rather control for it by including it in our model in an attempt to explain post-election hate crime rates. We are asking an entirely different question than fivethirtyeight's, and thus it is not surprising that our results disagree with fivethirtyeight's.

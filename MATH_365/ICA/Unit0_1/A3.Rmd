@@ -1,0 +1,137 @@
+# Math 365 / Comp 365: Activity 3
+# Introduction to the Limits of Accuracy
+
+### Objectives
+- Practice using root-finding algorithms
+- Gain exposure to issues of numerical accuracy
+
+This activity is related to the discussion in Section 1.3.
+
+### Example 1: *Root-finding in the presence of multiple roots*
+
+Consider the polynomial 
+
+$$f(x)=x^3-2x^2+\frac{4}{3}x-\frac{8}{27}=(x-\frac{2}{3})^3$$
+
+Let's have a look at the function:
+```{r}
+x = seq(-1,2,len=1000)
+f=function(x) {x^3-2*x^2+4/3*x-8/27}
+plot(x,f(x),pch=20,main="x^3-2*x^2+4/3*x-8/27")
+abline(0,0,col="red")
+points(2/3,0,col="blue",pch="*")
+```
+
+a. Discuss with a neighbor to understand what each line in the plotting code is doing. If you are confused, you can use R help, see the link to graphics in R on Moodle or Google R plotting instructions.
+
+b. Use your bisection method code to find the root. Use a starting interval of $[0,1]$ and a tolerance of $0.5*10^{-10}$. Also run this command, which will change the number of digits that R displays on output.
+
+My bisection method resulted in a root of 0.6666641 with the parameters intervale = c(0, 1), tol = 0.5e-10, and the above funtion. It took 17 iterations.
+
+```{r}
+options(digits=10)
+```
+How close is the answer to the actual root of $\frac{2}{3}$?
+
+Almost exact.
+
+c. Try to find the root with the R function `uniroot`. Is that any closer?
+
+```{r}
+interval = c(0, 1)
+tol = 0.5e-10
+uniroot(f, interval, tol = tol)
+```
+
+This root is almost exactly the same but it took 25 iterations.
+
+
+d. Now let's zoom in very close to the root:
+```{r}
+x = seq(0.666656,0.666674,len=1000)
+plot(x,f(x),pch=20,main="x^3-2*x^2+4/3*x-8/27")
+abline(0,0,col="red")
+points(2/3,0,col="blue",pch="*")
+```
+
+Do you have any ideas as to what might be happening? We'll discuss this next week!
+
+This is probably the approximation error associated with calculating very small floating point numbers related to how numbers are stored.
+
+### Example 2: *Even when we don't have multiple roots, issues can arise, as exemplified by the Wilkinson polynomial*
+
+The Wilkinson polynomial is named after the numerical analyst James Wilkinson.  It is defined as
+$$W(x) = (x-1)(x-2)(x-3) ... (x-20),$$ 
+which obviously has roots 1, 2, ..., 20. Multiplied out this becomes
+$$
+\begin{align}
+W(x) &= 2432902008176640000 - 8752948036761600000*x + 13803759753640704000*x^2 -     12870931245150988800*x^3 \\
+&+ 8037811822645051776*x^4 - 3599979517947607200*x^5  +     1206647803780373360*x^6 - 311333643161390640*x^7 \\
+&+ 63030812099294896*x^8 -     10142299865511450*x^9 + 1307535010540395*x^{10} - 135585182899530*x^{11} \\
+&+     11310276995381*x^{12} - 756111184500*x^{13} + 40171771630*x^{14} -1672280820*x^{15} 
++     53327946*x^{16} \\ &- 1256850*x^{17} + 20615*x^{18} - 210*x^{19} + x^{20}.\end{align}$$
+
+
+Here is the function defined in two different forms and plotted
+```{r}
+# Function defined in factored format
+Wilkinson = function(x) {
+  (-20 + x)*(-19 + x)*(-18 + x)*(-17 + x)*(-16 + x)*(-15 + x)*(-14 + x)*(-13 + x)*
+    (-12 + x)*(-11 + x)*(-10 + x)*(-9 + x)*(-8 + x)*(-7 + x)*(-6 + x)*(-5 + x)*(-4 + x)*
+    (-3 + x)*(-2 + x)*(-1 + x)
+}
+
+# Function defined in expanded format
+W = function(x){
+  2432902008176640000 - 8752948036761600000*x + 13803759753640704000*x^2 - 
+    12870931245150988800*x^3 + 8037811822645051776*x^4 - 3599979517947607200*x^5  + 
+    1206647803780373360*x^6 - 311333643161390640*x^7 + 63030812099294896*x^8 - 
+    10142299865511450*x^9 + 1307535010540395*x^10 - 135585182899530*x^11 + 
+    11310276995381*x^12 - 756111184500*x^13 + 40171771630*x^14 -1672280820*x^15 + 
+    53327946*x^16 - 1256850*x^17 + 20615*x^18 - 210*x^19 + x^20
+}
+
+# Plot the Wilkinson polynomial
+x = seq(0,21,len=1000)
+plot(x,W(x),type="l",ylim=c(-5e13,5e13),main="Wilkinson Polynomial")
+abline(0,0,col="red")
+```
+
+Note that I used the `ylim` parameter to set the range that is plotted on the $y$-axis.
+
+a. Use `bisect` and `uniroot`  to find the root at 16. Use the bracketing interval $[15.8,16.3]$ and use the unfactored form `W` of the polynomial. How many decimal places does it get correct? Note: with the factored version, it finds it exactly but that isn't so useful, because if we have a function nicely factored, we don't need to do numerical root-finding!
+
+The bisect funtion gets this correct to two decimal places in 33 iterations.
+
+```{r}
+wInt = c(15.8, 16.3)
+uniroot(W, wInt)
+```
+
+This also gets the correct answer to 2 decimal places but it only takes 11 iterations so it is much faster.
+
+
+b. This led Wilkinson to say in 1984: "Speaking for myself, I regard it as the most traumatic experience of my career as a numerical analyst." To feel his trauma, evaluate the function `W` at the root you computed in part a. What do you get? What should it be? 
+
+```{r}
+#Bisect
+W(16.00587) #-613911887872
+#Uniroot
+W(16.00651) #7516192768
+```
+
+We get not 0 for both, but should be getting 0 for each.
+
+
+c. Here is a new polynomial
+```{r}
+W2 = function(x){
+  2432902008176640000 - 8752948036761600000*x + 13803759753640704000*x^2 - 
+    12870931245150988800*x^3 + 8037811822645051776*x^4 - 3599979517947607200*x^5  + 
+    1206647803780373360*x^6 - 311333643161390640*x^7 + 63030812099294896*x^8 - 
+    10142299865511450*x^9 + 1307535010540395*x^10 - 135585182899530*x^11 + 
+    11310276995381*x^12 - 756111184500*x^13 + 40171771630*x^14 -1672280820*x^15 + 
+    53327946*x^16 - 1256850*x^17 + 20615*x^18 - (210+2^(-23))*x^19 + x^20
+}
+```
+It is the same as the Wilkinson polynomial, except I have changed the coefficient of $x^{19}$ by reducing it from $-210$ to $-(210 + 2^{-23})$. This is a relatively small change in the problem. See what the root that was at $x = 20$ increases to after this change has been made.  Look for it in the interval $[19.5,20.95]$. Huge error magnification is caused by small relative errors in storing the coefficients. This is an impressive example of ill-conditioning, which we'll discuss later.

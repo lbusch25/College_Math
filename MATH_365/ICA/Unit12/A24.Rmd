@@ -1,0 +1,126 @@
+# Math 365 / Comp 365: Activity 24: Singular Value Decomposition
+
+```{r,message=FALSE}
+source("https://drive.google.com/uc?export=download&id=10dNH3VbvxS8Z3OHjP4i9gRbtsf91VVBb") #365functions.R
+```
+
+### Part I: Computing the SVD
+
+#### Exercise 1
+
+(a) Let $A=\begin{bmatrix} 3 & 3 \\ 6 & 1 \\ 5 & 2 \end{bmatrix}$ (a tall skinny matrix). Use the function `svd` to find the reduced SVD of $A$. Form and multiply out the matrices $U$, $\Sigma$, and $V^{\top}$ to confirm that you recover $A$.
+```{r}
+A=cbind(c(3,6,5),c(3,1,2))
+out = svd(A)
+out
+u = out$u
+sigma = cbind(c(out$d[1], 0), c(0, out$d[2]))
+v = out$v
+
+Ares = u%*%sigma%*%t(v)
+Ares
+
+```
+
+(b) Repeat part (a) on the wide matrix 
+$B=\begin{bmatrix} 3 & 6 & 5 \\ 1 & 2 & 1 \end{bmatrix}$. Then sketch a rough picture of the image of the unit sphere in $\mathbb{R}^3$ under the linear transformation $B$ (it is an ellipse in $\mathbb{R}^2$).
+```{r}
+B=rbind(c(3,6,5),c(1,2,1))
+out = svd(B)
+out
+u = out$u
+sigma = cbind(c(out$d[1], 0), c(0, out$d[2])) #can use diag on this vector
+v = out$v
+
+Bres = u%*%sigma%*%t(v)
+Bres
+```
+
+
+(c) Let $C=\begin{bmatrix}
+1/3 & 1/3 &2/3 \\ 2/3 & 2/3 & 4/3 \\ 1/3 & 2/3 & 1 \\
+2/5 & 2/5 & 4/5 \\ 3/5 & 1/5 & 4/5
+\end{bmatrix}$. It is a $5 \times 3$ matrix that is not full rank. Use the full SVD to find an orthonormal basis for each of the four fundamental subspaces of $C$. Note: you can tell R to generate $p$ columns of $U$ by using `svd(C,nu=p)`.
+
+```{r}
+C=rbind(c(1/3,1/3,2/3),c(2/3,2/3,4/3),c(1/3,2/3,3/3),c(2/5,2/5,4/5),c(3/5,1/5,4/5))
+
+out = svd(C, nu=nrow(C))
+out
+u = out$u
+sigma = diag(out$d) #can use diag on this vector
+sigma
+v = out$v
+
+```
+
+The orthonormal basis for the Col(A) = first three columns of U. 
+
+Orthonormal basis for Null(A^T) is next two columns of U.
+
+First 3 columns in V are basis for row(A).
+
+There null space of A is the last column (3) of V.
+
+As a reminder, here is Gilbert Strang's picture of the four fundamental subspaces:
+
+ <img src="Images/four_spaces.PNG" width="550px" />
+ 
+### Part II: Computational Applications of the SVD: Rank, Matrix Norm, and Condition Number
+
+#### Exercise 2
+
+(a) In Math 236, we determine the rank of a matrix by doing row reductions; however, we now know that when we do this on a computer, rounding errors might be introduced. In theory, the rank of the matrix is also equal to the number of nonzero singular values. In practice, the SVD is used to determine the numerical rank of a matrix by counting the number of singular values greater than some small tolerance. The choice of tolerance depends on the problem, but a common method is something along the lines of 
+$$\mbox{tol}= 10\epsilon_{\mbox{mach}}||A||,$$
+where the matrix norm of $A$ is an easily computable one like the infinity norm (maximum absolute row sum) or Frobenius norm (square root of the sum of all the squared entries). Compute the singular values of the matrix $C$ from Exercise 1c and use them to determine the rank of $C$. Recall that `.Machine$double.eps` will give you the machine epsilon for double precision.
+
+```{r}
+tol = 10 * .Machine$double.eps * norm(C)
+tol
+```
+
+This implies that the third singular value in $sigma$ is 0, as it is below our tolerance level.
+
+(b) Recall that the matrix norm of a matrix is the maximum relative expansion of the linear transformation represented by that matrix. Specifically, using the 2-norm
+$$||A||_2=\max_{||x||_2=1}||Ax||_2 =\max_{||x||_2=1} \sqrt{x^\top A^{\top}Ax}=\sqrt{\lambda_{\max}(A^{\top}A)}= \sigma_1 .$$
+Using your matrix $A$ from Exercise 1a, check that the command
+```{r}
+base::norm(A,type='2')
+
+```
+gives you the same value as the largest singular value of $A$. If you look into the help file for the `norm` function, you'll see that it is calculated with `svd`.
+
+(c) Similarly, the condition number is the maximum relative expansion divided by the minimum relative expansion. Thus, using the 2-norm, we have
+$$\kappa_2(A) = \frac{\max_{||x||_2=1}||Ax||_2}{\min_{||x||_2=1}||Ax||_2} = \frac{\mbox{maximum singular value}}{\mbox{minimum singular value}}=\frac{\sigma_1}{\sigma_{\min}}.$$
+Look at the code we've been using for `Cond` in `365Functions.r` all semester. What does it do?
+
+### Part III: The Pseudoinverse and the SVD Method for Least Squares
+
+As a graphical reminder of the least squares problem, here are two more figures from Gilbert Strang's article "The Fundamental Theorem of Linear Algebra," which I've linked on Moodle.
+
+ <img src="Images/fig_ls1.PNG" width="550px" />
+
+ <img src="Images/fig_ls2.PNG" width="550px" />
+ 
+#### Exercise 3
+
+(a) Let $A=U\Sigma V^T$. Show that the pseudoinverse $A^{+}=(A^T A)^{-1}A^T = V \Sigma^{-1} U^T.$
+
+
+(b) For the least squares problem, we want an approximate solution of $Ax=b$ when $b \notin {\cal C}(A)$. Assume $A$ is an $m \times n$ matrix with $m>n$. We already looked at how to solve this problem via 1) the normal equations, and 2) QR decomposition. A third method is to use the SVD. The following method has better stability properties than QR when $A$ is close to rank-deficient, and has roughly the same complexity when $m$ is much bigger than $n$, but is slower than QR when $m$ is close to $n$.
+Show that $Ax-b = \bar{U}[{\bar{\Sigma}} y - c]$ where $y=V^T x$ and $c=\bar{U}^T b$.
+
+(c) Explain why $||r||_2=||Ax-b||_2=||\bar{\Sigma} y - c||_2$.
+
+(d) Explain how to continue to find the least squares solution $x_*$.
+
+(e) Show that the least squares error (2-norm) is $\sqrt{\sum_{i=r+1}^m c_i^2}$.
+
+#### Exercise 4
+
+Use the SVD to find a least squares solution to $Ax= b$, where $b = (15, 12,  8, 5,  7)^T$ and  $A=\begin{pmatrix}1 & -1 & 2\\1 & 1& 4\\0& 0& 4\\1& 1& 2\\1& 1& 1\end{pmatrix}$.
+
+(a) First do it with the reduced SVD (this is what `R` will give back if you use `svd(A)`).  You should find $x_*$, $b_*$, and the residual vector $r=b-b_*$.  Compute $||r||$.
+
+(b) Now use the full SVD to do it (you do this by telling `svd` how many vectors you want in `U` by using `nu = ???`).  When you do it this way you have to be careful about dividing by zero if $A$ is not full rank, but the upside is that you can calculate $||r||$ using the vector $c=\bar{U}^T b$, without having to compute $x_*$ or $r$.  
+Note: in practice, you would always compute the least squares solution with the reduced SVD, not the full one.

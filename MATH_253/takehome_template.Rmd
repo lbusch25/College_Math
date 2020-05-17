@@ -1,0 +1,265 @@
+---
+title: "Math 253 Take-Home Exam"
+author: Lawson Busch
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+
+
+
+
+
+\
+\
+
+## Libraries and Data
+
+```{r warning = FALSE, message = FALSE}
+library(dplyr)
+library(ggplot2)
+library(tree)
+library(broom)
+library(infer)
+library(rpart)
+library(randomForest)
+```
+
+
+```{r}
+ratings <- read.csv("https://www.macalester.edu/~ajohns24/data/paintscores.csv")
+head(ratings)
+```
+
+```{r}
+mushrooms <- read.csv("https://www.macalester.edu/~ajohns24/data/mush_data.csv")
+head(mushrooms)
+```
+
+
+## Exercise 1
+
+To determine the schools to which these painters belong, I will first define a new data set without the names of the painters. Then we can use the dist() function in R to calculate their closeness.
+
+```{r}
+ratings_no_name <- ratings %>%
+  select(-painter)
+
+head(ratings_no_name)
+```
+
+I will use K-means clustering. I will use this method because we want information about each individual school, which is easier to read using K-means clustering. First, I will make a Dendrogram to find the number of clusters.
+
+```{r}
+set.seed(253)
+scaled_no_name <- scale(data.matrix(ratings_no_name))
+paint_hierarchy <- hclust(dist(scaled_no_name))
+plot(paint_hierarchy)
+```
+
+Above, we can see four natural clusters in this data. To learn about these clusters I will implement K-means clustering with k=4. I will then calculate the means of each category for each cluster. 
+
+```{r}
+set.seed(253)
+k_4 <- kmeans(scaled_no_name, centers = 4)
+
+ratings_clusters <- ratings_no_name %>% 
+    mutate(k_clust = k_4$cluster) %>% 
+    group_by(k_clust) %>% 
+    summarize(mean_color = mean(color),
+        mean_comp = mean(composition), 
+        mean_draw = mean(drawing),
+        mean_express = mean(expression)) %>%
+    arrange(desc(mean_color))
+
+head(ratings_clusters)
+```
+
+The summary gives us information to help name our schools. Cluster 3 is the Expression school, as it by far has the highest expression values. Cluster four is the pure drawing school, as it has a much higher drawing value than any other attribute in the cluster. Cluster two is the Color school, as its color values are significantly higher than both its other attributes and the color value for the other clusters. And lastly, cluster one is Color Composition school, as it is well rounded and uses a good amount of color.
+
+Visually:
+
+```{r}
+ggplot(ratings_clusters, aes(x = mean_comp, y = mean_draw, alpha = mean_color, size = mean_express)) + geom_point()
+```
+
+
+
+\
+\
+\
+\
+\
+\
+
+
+
+## Exercise 2
+
+
+From our sample data, we can calculate the proportion of mushrooms that live in urban habitats:
+
+```{r}
+(count(dplyr::filter(mushrooms, Habitat == "u")))/nrow(mushrooms)
+```
+
+Or in our sample we get that roughly 4% of mushrooms live in urban habitats.
+
+We can construct a bootstrap confidence interval to get a 95% confidence interval for the population.
+
+First, we will take 1000 resamples of our mushrooms data:
+
+```{r}
+mushrooms_resamples <- rep_sample_n(mushrooms, size = nrow(mushrooms), replace = TRUE, reps = 1000)
+```
+
+
+We can now calculate the proportion of mushrooms that live in urban habitats for each sample:
+
+```{r}
+mushrooms_urban_props <- mushrooms_resamples %>%
+  group_by(replicate) %>%
+  filter(Habitat == "u") %>%
+  summarize(prop_urban = n()/nrow(mushrooms))
+
+head(mushrooms_urban_props)
+```
+
+We can then calculate and interpret a 95% confidence interval for the true population proportion by using the quantile function:
+
+```{r}
+quantile(mushrooms_urban_props$prop_urban, c(0.025, 0.975))
+```
+
+Or we can say that we are 95% confident that the true proportion of mushrooms that live in urban habititats (as calculated by our 1000 bootstrap samples) falls between 0.035 (3.5%) and 0.044 (4.4%).
+
+\
+\
+\
+\
+\
+\
+
+
+
+## Exercise 3
+
+First, we need to create sample training and sample testing data sets. 
+
+```{r}
+set.seed(253)
+index <- sample(c(1:nrow(mushrooms)), size = 0.8*nrow(mushrooms))
+train_shrooms <- mushrooms[index, ]
+test_shrooms <- mushrooms[-index, ]
+```
+
+Next, we need to generate a model using our training data set. I have decided to use a tree, as the primary goal is to classify whether or not a mushroom is poisonous and to set the cp parameter to 0.0, to avoid pruning our tree so it is as accurate as possible.
+
+```{r}
+set.seed(253)
+tree_prune <- rpart(Status ~ ., test_shrooms, cp = 0.0)
+print(tree_prune)
+plot(tree_prune, margin = 0.2)
+text(tree_prune, cex = 0.8)
+```
+
+```{r}
+set.seed(253)
+pred_tree_status <- predict(tree_prune, newdata = test_shrooms, type = "class")    
+true_status <- test_shrooms$Status
+
+tree_tab <- table(pred_tree_status, true_status)
+tree_tab
+sum(diag(tree_tab))/sum(tree_tab)
+```
+
+Our model is 99.2% accurate! Further, we can see that all 710 poisonous mushrooms in our data were correctly classified!
+
+We can also describe poisonous and edible mushrooms. Poisonous Mushrooms have a chocolate or white SporeColor with one ring or a Black or Brown SporeColor with a narrow GillSize or a scaly or smooth CapSurface that grow in the woods.
+
+Edible mushrooms have a Chocolate or White SporeColor with two rings or a Black or Brown SporeColor with a broad GillSize or a fibrous CapSurface that grow in an urban habitat.
+
+
+
+\
+\
+\
+\
+\
+\
+
+
+
+## Exercise 4
+
+
+While my model has a good overall classification rate (99.2% correct), I will not focus on this metric for my warning label. Instead, I will focus on the sensitivity of a poisonous mushroom. I am choosing this measurement because it is highly important that my model identifies poisonous mushrooms correctly, as the consequences of categorizing an edible mushroom as poisonous are insignificant compared to the potential consequences of categorizing a poisonous mushroom as edible. 
+
+
+
+To do this we can take another look at the classifications made on our testing data set:
+
+```{r}
+tree_tab
+```
+
+My model has a sensitivity of 1 ( (710 + 0)/710 ), and it perfectly identifies poisonous mushrooms. Thus, we can say that there is little to no risk of using my tool to classify mushrooms in the field! (There is still some risk because poisonous mushrooms outside of the sample could be misclassified as edible).
+
+
+\
+\
+\
+\
+\
+\
+
+
+## Exercise 5
+
+To understand the association between edibility with cap surface and stalk shape we can make a logarithmic classification model. 
+
+```{r}
+log_mod <- glm(Status ~ CapSurface + StalkShape, train_shrooms, family="binomial")
+summary(log_mod)
+```
+
+
+We can see that all of these predictors have a statistically significant impact on a mushroom's edibility. The main take aways from this summary is that having either a scaley or smooth CapSurface increases a mushroom's liklihood of being poisonous, while having a tapering StalkShape decreases the mushroom's likelihood of being poisonous.
+
+To intepret these coefficients, it is best to convert them from log(odds) for to odds form:
+
+```{r}
+exp(1.34161)
+exp(0.98666)
+exp(-0.88777)
+```
+
+For every unit increase in "CapSurface s" (smooth), the odds of the mushroom being poisonous increase by a multiplicative factor of 3.825197, and for every unit increase in "CapSurface y" (scaly), the odds of the odds of the mushroom increase by a multiplicative factor of 2.682261. Lastly, we see that for every unit increase in "StalkShape t" (tapering) the odds of the mushroom being poisonous decreases by a multiplicative factor of 0.4115725. 
+
+For a specific example, we can look at a tapering stalk fibrous cap mushroom vs an enlarging stalk scaly surface mushroom. 
+
+For the specific calculations:
+```{r}
+tapering_stalk_fibrous_cap <- -0.23979 + -0.88777
+tsfc_odds <- exp(tapering_stalk_fibrous_cap)
+tsfc_odds
+```
+
+Or 0.32 to 1 odds of being poisonous.
+
+```{r}
+enlarging_stalk_scaly_surface <- -0.23979 + 0.98666
+esss_odds <- exp(enlarging_stalk_scaly_surface)
+esss_odds
+```
+
+Or 2.11 to 1 odds of being poisonous.
+
+\
+\
+\
+\
+\
+\

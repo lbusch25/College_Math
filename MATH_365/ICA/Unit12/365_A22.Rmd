@@ -1,0 +1,131 @@
+# Math 365 / Comp 365: Activity 22: The Power Method and Its Variants
+
+```{r,message=FALSE}
+source("https://drive.google.com/uc?export=download&id=10dNH3VbvxS8Z3OHjP4i9gRbtsf91VVBb")
+```
+
+## Part I: The Power Iteration
+
+Let $A$ be an $n \times n$ matrix. To perform the ***power iteration***, we select any vector $x^{(0)}$ in $\mathbb{R}^n$; compute $x^{(1)}=\frac{Ax^{(0)}}{||Ax^{(0)}||_2}$; then compute $x^{(2)}=\frac{Ax^{(1)}}{||Ax^{(1)}||_2}$; and so forth.
+
+(a)  Let $A v= \lambda v$ (i.e., $v$ is an eigenvector of $A$ associated with eigenvalue $\lambda$). Work out by hand what $A^k v$ is for some integer $k$.
+
+(b) Double check that the iterates of the power iteration satisfy $x^{(k)}=c_k A^k x^{(0)}$, where the sequence of constants $\{c_k\}_{k=0,1,\ldots}$ is defined as $c_k=\prod_{i=0}^{k-1} \frac{1}{ ||Ax^{(i)}||_2}$.
+
+(c) Any guess what the sequence $\{x^{(k)}\}_{k=0,1,\ldots}$ will converge to? 
+Let's try it out by building a `for` loop! Let $A=\frac{1}{9}\begin{pmatrix} ~~~83 & ~~~296 & -128 \\ ~~~296 & ~~~473 & -152 \\ -128 & -152 & ~~~335\end{pmatrix}$, and select any vector $x^{(0)}$ in $\mathbb{R}^3$. 
+
+
+```{r}
+A = cbind(c(83, 296, -128), c(296, 473, -152), c(-128, -152, 335))
+A = (1/9)*A
+x = c(1, 1, 1)
+A
+x
+raleigh = 0
+for(i in 1:100) {
+  x = (A%*%x)/vnorm(A%*%x, p=2)
+}
+
+x
+```
+
+
+
+(d) An orthonormal basis for $\mathbb{R}^3$ is 
+$$ v_1 = \begin{pmatrix} -\frac{4}{9}, -\frac{7}{9}, \frac{4}{9} \end{pmatrix}^T;~~~
+v_2 = \begin{pmatrix} \frac{1}{9},\frac{4}{9}, \frac{8}{9} \end{pmatrix}^T;~~~
+v_3 = \begin{pmatrix} \frac{8}{9},-\frac{4}{9}, \frac{1}{9} \end{pmatrix}^T .$$
+Find $a_1$, $a_2$, and $a_3$ such that your $x^{(0)}=a_1 v_1 + a_2 v_2 + a_3 v_3$. Hint: there's a simple way to find these coefficients.
+
+```{r}
+V = cbind(c(-4/9, -7/9, 4/9), c(1/9, 4/9, 8/9), c(8/9, -4/9, 1/9))
+solve(V, c(1, 1, 1))
+```
+
+
+(e) The orthonormal vectors $v_1$, $v_2$, and $v_3$ are actually eigenvectors of $A$, and they are ordered so that their associated eigenvalues are in order of decreasing magnitude: $|\lambda_1| > |\lambda_2| \geq |\lambda_3|$. Let's use this and put together (b), (d), and (a):
+$$\begin{align*}
+x^{(k)}&=c_k A^k x^{(0)} \\ &=c_k A^k (a_1 v_1 + a_2 v_2 + a_3 v_3) \\
+&=c_k (a_1 A^k v_1 + a_2 A^k v_2 + a_3 A^k v_3)\\
+&=c_k (a_1 \lambda_1^k v_1 + a_2 \lambda_2^k v_2 + a_3 \lambda_3^k v_3)\\
+&=c_k \lambda_1^k \left[a_1 v_1 + a_2 \left(\frac{\lambda_2}{\lambda_1}\right)^k v_2 + a_3 \left(\frac{\lambda_3}{\lambda_1}\right)^k v_3\right]
+\end{align*}$$
+Explain what happens as $k$ increases and we continue multiplying a vector by a power of $A$ and normalizing? Note: we need $a_1 \neq 0$. When does this happen?
+
+As $k$ increases the second and third terms are weighted less and less, and as $k$ goes to infinity the second and third terms will cancel out. The overall equation will go to 0 if $\lambda_1 < 0$ and infinty if $\lambda_1 > 0$. $a_1$ will be non-zero whenever it is necessary to represent $x_0$ as a linear combination of $v_1, v_2, v_3$. Converges to the eigenvalue $v_1$.
+
+(f) What type of convergence do we have here? What is the constant factor associated with this convergence? When will this algorithm converge quickly or slowly?
+
+Converges linearly with a convergence rate of $\frac{\lambda_2}{\lambda_1}$, since the lambda 3 term cancels out very quickly.
+
+(g) In each iteration of your `for` loop from (c), also compute and print out
+$$\lambda^{(k)}=\frac{\left(x^{(k)}\right)^T A x^{(k)}}{\left(x^{(k)}\right)^T x^{(k)}}.$$
+This is called the **Rayleigh quotient**. What does it converge to?
+
+```{r}
+
+A = cbind(c(83, 296, -128), c(296, 473, -152), c(-128, -152, 335))
+A = (1/9)*A
+x = rbind(1, 1, 1)
+A
+x
+for(i in 1:100) {
+  x = (A%*%x)/vnorm(A%*%x, p=2)
+  raleigh = (t(x)%*%A%*%x)/(t(x)%*%x)
+}
+
+raleigh
+x
+```
+
+
+## Part II: Inverse Power Iteration
+
+(a) Show that if $A$ is an $n \times n$ invertible matrix and $\lambda$ is an eigenvalue of $A$ with eigenvector $v$, then $\frac{1}{\lambda}$ is an eigenvalue of $A^{-1}$ with the same eigenvector $v$. 
+
+(b) What happens if you apply the power iteration to $A^{-1}$?
+
+(c) Let $A$ be an $n \times n$ matrix, and let $C=A-sI$, where $I$ is the $n \times n$ identity matrix and $s$ is a scalar. Show that if $\lambda$ is an eigenvalue of $A$ with eigenvector $v$, then $\lambda-s$ is an eigenvalue of $C$ with the same eigenvector $v$. Note: $s$ is often called a **shift**.
+
+(d) Let's say you had a guess $\bar{\lambda}$ for an eigenvalue of $A$ and wanted to find the associated eigenvector. Can you use the previous two results to come up with a good way to do that?
+
+## Part III: Rayleigh Quotient Iteration
+
+We can think of the Rayleigh quotient as an $n \times 1$ least squares problem: Let the matrix be the single vector $x \in \mathbb{R}^n$, the coefficient be $\alpha$, and the vector on the right-hand side be $Ax$. Now to find the scalar $\alpha$ that acts most like an eigenvalue, we want $x\alpha \approx Ax$, so we can minimize $||x\alpha - Ax||_2$. The normal equations for this are $x^T x \alpha^* = x^T A x$, or rearranging
+$$ \alpha^*=r(x)=\frac{x^T A x}{x^T x}.$$
+
+- This gives us a way to find an approximate eigenvalue of $A$ if we already have an approximate eigenvector 
+
+- In Part II, we saw how to find an approximate eigenvector of $A$ if we already have an approximate eigenvalue 
+
+- We can iterate these two steps:
+
+```{r}
+A=cbind(c(1,2,3,4,5),c(-1,-5,3,-2,1),c(3,6,5,-3,-12),c(-5,3,6,27,1),c(3,-4,-6,1,2))
+A=t(A)%*%A
+n=nrow(A)
+x=c(1,1,1,1,1)
+num.its=10
+for (k in 1:num.its){
+  u=x/vnorm(x)
+  print('Current eigenvector guess:')
+  print(u)
+  lambda=as.vector(t(u)%*%A%*%u)
+  print('Current eigenvalue guess:')
+  print(lambda)
+  x=solve(A-lambda*diag(n),u)
+  if (Cond(A-lambda*diag(n))>500000){
+    break}
+}
+e=eigen(A)
+print(e$values)
+print(e$vectors)
+```
+
+- This Rayleigh Quotient Iteration converges quadratically for nonrepeated (simple) eigenvalues, and cubically if $A$ is symmetric
+
+- However, it is  more complex than the power iteration or inverse power iteration, because each step requires a new LU factorization (in the `solve` function), as opposed to just one such factorization in the earlier methods
+
+- All three of these methods are for finding a single eigenvalue/eigenvector pair
+

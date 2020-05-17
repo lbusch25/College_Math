@@ -1,0 +1,138 @@
+
+## Math 365 / Comp 365: Activity 17
+## Orthogonal Projections, Least Squares, and the Normal Equations
+
+```{r,message=FALSE, warning=FALSE}
+require(Matrix)
+require(mosaic)
+require(mosaicCalc)
+source("https://drive.google.com/uc?export=download&id=10dNH3VbvxS8Z3OHjP4i9gRbtsf91VVBb") #Sources 365.r functions so i dont have to download and use every time
+```
+
+### Exercise 1
+
+This exercise should be review of principles covered in MATH 236. For all distances, use the standard Euclidean norm (2-norm).
+
+Let $a_1 = \begin{bmatrix} 0 \\ 3 \\ 4 \end{bmatrix}$ and $a_2 = \begin{bmatrix} 2 \\ 2 \\ 1 \end{bmatrix}$ be the columns of the 3x2 matrix $A$. Let ${\cal W}=\hbox{col}(A)=\hbox{span}\{a_1,a_2\}$, and let $b = \begin{bmatrix} 2 \\ -1 \\ 1 \end{bmatrix}$.
+
+a) Find the orthogonal projection of $b$ onto $\hbox{span}\{a_1\}$. Call that $\hat{b}_1$.
+
+```{r}
+a1 = c(0, 3, 4)
+a2 = c(2, 2, 1)
+b = c(2, -1, 1)
+
+b1hat = a1%*%solve((t(a1)%*%a1))%*%(t(a1)%*%b)
+b1hat
+```
+
+
+b) Find the orthogonal projection of $b$ onto $\hbox{span}\{a_2\}$. Call that $\hat{b}_2$.
+
+```{r}
+b2hat = a2*solve((t(a2)%*%a2))*t(a2)%*%b
+b2hat
+```
+
+
+c) Compute the pseudoinverse of $A$.
+
+```{r}
+A = cbind(a1, a2)
+psuedoInv = solve(t(A)%*%A)%*%t(A)
+psuedoInv
+```
+
+
+d) Compute the projection operator $P_{{\cal W}}$ such that the closest point to a given vector $v \in \mathbb{R}^3$ in the space ${\cal W}$ is $P_{{\cal W}}v$.
+
+```{r}
+projectionOp = A%*%psuedoInv
+projectionOp
+```
+
+
+e) Find the vector $\hat{b} \in {\cal W}$ that is closest to $b$.
+
+```{r}
+bhat = projectionOp %*% b
+bhat
+```
+
+
+f) TRUE or FALSE: $\hat{b}=\hat{b}_1 + \hat{b}_2$. When is this true in general? When is it false?
+
+If $a_1$ and $a_2$ are orthogonal to each other, then the statement $\hat{b}=\hat{b}_1 + \hat{b}_2$ will always be true. Otherwise, it will be false. This is because $b_{hat}$ is an othogonal project across all of the columns of $a$.
+
+g) Let ${\cal W}^{\perp}$ be the orthogonal complement of $W$; i.e., every vector in ${\cal W}^{\perp}$ is orthogonal to every vector in $W$. What is the dimension of ${\cal W}^{\perp}$ for this problem?
+
+h) Draw an abstract picture (don't worry about getting the placement of the vectors correct) and label $a_1$, $a_2$, ${\cal W}$, ${\cal W}^{\perp}$, $b$, $\hat{b}_1$, $\hat{b}_2$, $\hat{b}$, and $r=b-\hat{b}$.
+
+i) Find vectors $v_1$ and $v_2$ in $\mathbb{R}^3$ such that (i) $b=v_1+v_2$; (ii) $v_1 \in {\cal W}$; and (iii) $v_2 \in {\cal W}^{\perp}$.
+
+j) What is the distance from $b$ to ${\cal W}$?
+
+### Exercise 2
+
+Consider the points:
+```{r}
+t=1:8
+y=c(1,3,2,5,5,7,7,7)
+plot(t,y,col='red',pch=20,cex=2,xlim=c(1,8),ylim=c(0,10))
+grid()
+```
+
+a) Setup the normal equations and solve them with R's `solve` function in order to find the least squares straight line fit for this data. Plot your regression line on the same plot with the points. Hint: We have written code in `365Functions.r` called `Vandermonde` that may be useful.
+
+b) Setup and solve the normal equations in order to find the least squares parabola fit (i.e., polynomial of degree 2) for this data. Plot your best fit curve on the same plot with the points. Once you have your regressed coefficients `coeffs`, you can also plot the predicted values and residuals with the following code:
+
+```
+# predicted values
+bhat = A %*% coeffs
+points(t,bhat,col='black',pch=19,cex=1)
+# residuals
+r = y - bhat
+for (i in 1:length(t)) lines(c(t[i],t[i]),c(y[i],bhat[i]))
+```
+
+c) Do you expect $||Ax_*-b||_2^2$ (the sum of squared residuals) to be lower for part a) or part b)? Why? Explain in plain English and using linear algebra vocabulary. Does your answer depend on the set of data given to you? Compute the sum of squared residuals for part a) and part b) to see if it matches your intuition.
+
+#### MATH 155 Sidebar
+
+Many of you are taking or have completed MATH 155. There you do linear regression problems every day with the command `lm`. We can now understand that this function is doing an orthogonal projection to solve a least squares problem with linear algebra techniques. Here is the same example of fitting a parabolic model, as you would do it in MATH 155: 
+
+```{r}
+myData=data.frame(t,y)
+# In Math 155, these are called transformation terms
+myData=transform(myData,t1=t,t2=t^2)
+mod = lm(y ~ t1+t2,data=myData)
+print(summary(mod))
+mod
+
+q = function(z) Horner(coef(mod),z)
+plot(t,y,col='red',pch=20,cex=2,xlim=c(1,8),ylim=c(0,10))
+xx=seq(0,9,length=100)
+lines(xx,q(xx),col='blue')
+grid()
+```
+
+You can double check, for example, the value of $R^2=1-\hbox{var}(residuals)/\hbox{var}(response)$ for the model you computed with the normal equations to check it matches the one computed by the `summary` function in the `mosaic` package:
+
+```
+r.squared=1-var(r)/var(y)
+print(r.squared)
+```
+
+Life may be easier when you don't strive to understand the details, but it is so much more satisfying when you do!!!
+
+### Exercise 3
+
+In this exercise, we use optimization to show that a vector $x$ that satisfies the normal equations represents the coefficients of the least squares solution. 
+
+a) Show that the least squares criterion $\frac{1}{2} ||Ax-b||_2^2$ can be written as a quadratic function 
+$$ f(x)=\frac{1}{2}x^{\top}Px + q^{\top}x+c.$$
+That is, find the matrix $P$, vector $q$ and constant $c$ in terms of $A$ and $b$. Hint: remember that for any vector $v$, $||v||_2^2=v^{\top}v$.
+
+b) Show that the $P$ matrix from part (a) is symmetric and positive semidefinite.
+
+c) Recall that if the $P$ matrix in the quadratic function form above is symmetric positive semidefinite, then $\nabla f(x)=Px+q$, and the critical point $x$ satisfying $\nabla f (x)=0$ is a global minimum. Conclude that the value of $x$ that satisfies the normal equations gives the optimal least squares coefficients.

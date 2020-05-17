@@ -1,0 +1,335 @@
+---
+title: "HW2"
+author: "Lawson Busch"
+date: "9/13/2018"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+```
+
+## Excercise 1
+```{r}
+google <- read.csv("http://www.openintro.org/stat/data/goog.csv")
+
+head(google)
+```
+### 1a)
+```{r}
+nrow(google)
+```
+
+26 countries requested user data from google in this time frame.
+
+### 1b)
+
+```{r}
+google <- arrange(google, desc(requests))
+head(google)
+```
+
+### 1c)
+
+```{r}
+google <- google %>% 
+    mutate(request_rate = requests / (pop*1000)) %>%
+    arrange(desc(request_rate))
+
+head(google)
+```
+
+### 1d)
+
+```{r}
+ggplot(google, aes(x = request_rate)) + geom_density()
+```
+
+From the geom_density plot we see that there are two distinct groupings of countries' request rates. The majority of countries appear to make requests on the order of $5*10^{-6}$, while another group of countries is centered around approximately $1.8*10^{-5}$.
+
+### 1e)
+
+The six countries with the highest request rates are:
+```{r}
+google_hr <- google %>%
+  arrange(desc(request_rate))
+head(google_hr)
+```
+
+And the six countries with the lowest request rates are:
+```{r}
+google_lr <- google %>%
+  arrange(request_rate)
+head(google_lr)
+```
+
+
+## Excercise 2
+
+Here is a scatterplot demonstrating the relationship between freepress (as a predictor) and request_rate:
+
+```{r}
+ggplot(google, aes(x=freepress, y=request_rate)) + geom_point()
+```
+
+In general, it appears that as the percentage of free press increases, the request_rate decreases.
+
+### 2b
+
+```{r}
+filter(google, freepress>60, request_rate > 2.0*10^(-5))
+```
+We can see that the outlier in this dataset is singapore.
+
+```{r}
+google_sub <- google %>%
+  filter(country != "singapore")
+```
+
+### 2c
+
+```{r}
+ggplot(google, aes(x = freepress, y = request_rate)) + 
+    geom_point() + 
+    geom_smooth(method = "lm") + 
+    geom_smooth(data = google_sub, method = "lm", color = "red")
+```
+
+We can see that request_rate decreases as the rate of free press increases for a given country. By removing the outlier, we see that the trend is actually much stronger than if we leave the outlier in, as the slope of the model (red line) is larger in the negative direction once the outlier is removed.
+
+## Excercise 3
+
+```{r}
+model_1 <- lm(request_rate ~ freepress + hdi + internet, google_sub)
+model_2 <- lm(request_rate ~ freepress + hdi, google_sub)
+model_3 <- lm(request_rate ~ freepress, google_sub)
+```
+
+### 3a)
+
+```{r}
+summary(model_1)
+```
+
+As freepress and internet rates increase, the request_rate for countries decreases. But as hdi increases, the request rate for countries also increases.
+
+### 3b)
+
+```{r}
+summary(model_2)
+summary(model_3)
+```
+
+By looking at each predictors individual P values in the summary section (the Pr(>|t|) column), we can see that freepress is a statistically significant term in model_3, but not in model_2 or model_1. This is because freepress has a P value less than 0.05 in model_3, but its P value is greater than 0.05 in model_1 and model_2.
+
+This effect can occur if two predictors have multicollinearity, meaning that one predictor can be linearly predicted to some degree of certainty from the other. Since freepress is not statistically significant in the more complex models, one can resonable guess that has some multicollinearity (probably with the hdi predictor). This does not make freepress a useless predictor by itself, but does mean that freepress is not a useful predictor when paired with its colinear predictor (again, probably hdi), since it can be linearly explained by the other predictor.
+
+### 3c
+
+To demonstrate my point in part b, I will graph freepress by hdi:
+```{r}
+ggplot(google_sub, aes(x = hdi, y = freepress)) + geom_point() + geom_smooth(data = google_sub, method = "lm")
+```
+
+From this plot we can see that freepress can be linearly explained by the hdi predictor, indicating multicollinearity between the two variables and that freepress is not a useful predictor when paired with hdi (it is still statisically significant on its own, however).
+
+## Excercise 4
+
+```{r}
+model_1_output <- data.frame(name = google_sub$country,
+    observed  = google_sub$request_rate,
+    predicted = model_1$fitted,
+    residual  = model_1$residual)
+
+model_2_output <- data.frame(name = google_sub$country,
+    observed  = google_sub$request_rate,
+    predicted = model_2$fitted,
+    residual  = model_2$residual)
+
+model_3_output <- data.frame(name = google_sub$country,
+    observed  = google_sub$request_rate,
+    predicted = model_3$fitted,
+    residual  = model_3$residual)
+```
+
+### 4a)
+
+```{r}
+rss1 = sum(model_1_output$residual^2)
+rss2 = sum(model_2_output$residual^2)
+rss3 = sum(model_3_output$residual^2)
+
+rss1
+rss2
+rss3
+```
+
+```{r}
+mspe1 = rss1/nrow(google_sub)
+mspe2 = rss2/nrow(google_sub)
+mspe3 = rss3/nrow(google_sub)
+
+mspe1
+mspe2
+mspe3
+```
+
+```{r}
+tss1 = sum((model_1_output$observed - mean(model_1_output$observed))^2)
+
+tss2 = sum((model_2_output$observed - mean(model_2_output$observed))^2)
+
+tss3 = sum((model_3_output$observed - mean(model_3_output$observed))^2)
+
+r1sq = 1 - rss1/tss1
+r2sq = 1 - rss2/tss2
+r3sq = 1 - rss3/tss3
+
+r1sq
+r2sq
+r3sq
+```
+
+### 4b)
+
+From these measurements we can see that model_1 is the best model because it explains the most variablility in the data, as it has the highest $R^2$ value.
+
+### 4c) 
+
+While model_1 is the most complex, it explains the variability in the data the best, as its $R^2$ is the highest. If we wanted a simpler model, I would not choose model_1, but I think it is the best model otherwise.
+
+### 5)
+
+```{r}
+# Load the data
+animals <- read.csv("https://www.macalester.edu/~ajohns24/data/Brains.csv")
+dim(animals)
+## [1] 62  3
+```
+
+```{r}
+animal_mod_1 <- lm(BrainWt ~ BodyWt, animals)
+```
+
+```{r}
+ggplot(animals, aes(x = BodyWt, y = BrainWt)) + geom_point() + geom_smooth(data = animals, method = "lm")
+```
+
+### 5a) 
+
+The model meets the independence assumption because the observations for each animal do not depend on the oberservations of any other animal. That is to say that a seal's body weight and brain weight do not depend on the body weight or brain weight of any other animal in the data set.
+
+### 5b)
+
+```{r}
+animal_1_output <- data.frame(
+    predicted = animal_mod_1$fitted,
+    residual  = animal_mod_1$residual)
+```
+
+First to check the observation of trend and homoskedasticity we can plot the residuals of the model against the predictions:
+
+```{r}
+ggplot(model_1_output, aes(y = residual, x = predicted)) + 
+    geom_point() + 
+    geom_hline(yintercept = 0)
+```
+
+From the above plot we can see that the assumption of trend is held as the points seem to be evenly scattered around 0. However, we can also see that the assumption of homoskedasticity does not hold, as the residual values begin to diverge away from 0 as we get larger predicted values, indicating heteroskedasticity. 
+
+To check the assumption of normality we can create a q-q plot of the residuals:
+
+```{r}
+# Q-Q plot of residuals
+ggplot(animal_1_output, aes(sample = residual)) + 
+    geom_qq()
+```
+
+If the assumption of normality holds, we would expect the point in the q-q plot to look like a strait line, but instead they appear to follow an exponential curve. Thus, the assumption of normality does not hold.
+
+### 5c)
+
+The fact that the assumption of homoskedasticity is violated in this model makes sense due to the nature of the data. With data about body weight and brain weight, we should expect that as animals get bigger, they get heavier bodies and brains. However, we should also realize that animals are very different, and do not increase in weights at a steady rate, and thus that residuals will increase as we move right (increase in weights) along the model.
+
+### 5d)
+
+```{r}
+ggplot(animals, aes(x = log(BodyWt), y = log(BrainWt))) + geom_point() + geom_smooth(data = animals, method = "lm")
+```
+
+Just using this model, the log transformations appear to have fixed the assumption violations, as there no longer appear to be growing residuals as we move to the right along the model (implying heteroskedasticity holds) and the residuals throughout the model appear to be normally distributed (implying normality holds). The assumption of trend also holds as it appears to be a linear trend.
+
+## Excercise 6
+
+```{r}
+animal_sim <- function(n) {
+  brain_mean = rep(0, 1000)
+  for(i in 1:1000) {
+    samp = sample_n(animals, size = n, replace = TRUE)
+    l = log(samp$BrainWt)
+    m = mean(l)
+    brain_mean[i] = m
+  }
+  return(data.frame(brain_mean))
+}
+
+set.seed(2000)
+sim_10 <- animal_sim(10)
+head(sim_10)
+```
+
+## Excercise 7
+
+```{r}
+set.seed(2000)
+sim_10 <- animal_sim(n = 10)
+sim_62 <- animal_sim(n = 62)
+```
+
+### 7a)
+
+```{r}
+ggplot(sim_10, aes(x = brain_mean)) +
+    geom_histogram(color = "white") + 
+    lims(x = c(0,6))
+```
+
+To calculate the mean and standard deviation of the brain_mean variable in the sim_10 sample:
+```{r}
+mean(sim_10$brain_mean)
+sd(sim_10$brain_mean)
+```
+
+### 7b)
+
+```{r}
+ggplot(sim_62, aes(x = brain_mean)) +
+    geom_histogram(color = "white") + 
+    lims(x = c(0,6))
+```
+
+To calculate the mean and standard deviation of the brain_mean variable in the sim_62 sample:
+```{r}
+mean(sim_62$brain_mean)
+sd(sim_62$brain_mean)
+```
+
+### 7c)
+
+```{r}
+mean(sim_10$brain_mean)
+mean(sim_62$brain_mean)
+mean(log(animals$BrainWt))
+```
+
+These mean values overall are very similar, with the mean for the original animals data set being the largest. It makes sense that these values would be similar, since the samples for samp_10 and samp_62 are taken from the animals data set initially, so their mean should be similar to the mean of the original data values.
+
+### 7d)
+
+```{r}
+sd(sim_10$brain_mean)
+sd(sim_62$brain_mean)
+```
+
+The standard deviation is smaller for the sim_62 data. This makes sense because the sample size is larger for the sim_62 data than the sim_10 data, and as we get a larger sample size, we should get a better overall picture of the data, decreasing our standard deviation. The values match this expectation.

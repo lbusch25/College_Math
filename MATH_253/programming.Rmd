@@ -1,0 +1,142 @@
+---
+title: "253 functions"
+author: "Lawson Busch"
+date: "9/13/2018"
+output: html_document
+---
+
+```{r}
+x1 <- rep(2,10)
+x1
+x2 <- rep(10,2)
+x2
+x3 <- c(1:6)
+x3
+x4 <- c(1,3,5,7,7,9,9)
+x4
+```
+
+```{r}
+length(x1)
+length(x2)
+```
+
+```{r}
+x4[2]
+x4[4]
+x4[-1]
+```
+
+```{r}
+# Try this multiple times
+sample(x3, size = 6, replace = TRUE)
+
+# Try this multiple times
+sample(x3, size = 6, replace = FALSE)
+```
+
+```{r}
+z <- data.frame(matrix(c(1:12), nrow=4))
+z
+```
+
+```{r}
+z[1,]
+z[,1]
+z[-1,]
+z[,-1]
+```
+
+```{r}
+library(dplyr)
+
+# Try the following multiple times
+sample_n(z, size = 3, replace = FALSE)
+
+# Try the following multiple times
+sample_n(z, size = 3, replace = TRUE)
+```
+
+```{r}
+set.seed(2000)
+sample(x3, size = 4, replace = FALSE)
+sample_n(z, size = 3, replace = FALSE)
+```
+
+```{r}
+addab <- function(a,b){     
+    a + b                   
+} 
+
+# Try it out!
+addab(a = 2, b = 3)
+addab(a = 1, b = -2)
+```
+
+```{r}
+prod3 <- function(a, b, c) {
+  return(a*b*c)
+}
+```
+
+```{r}
+newab <- function(a,b){
+ sumab  <- a + b
+ diffab <- a - b
+ return(data.frame(sumab, diffab))
+}
+
+# Try it out!
+tryit <- newab(a = 2, b = 3)
+tryit
+tryit$sumab
+tryit$diffab
+```
+
+```{r}
+minMax <- function(a, b, c) {
+  vec = c(a, b, c)
+  maxVec = max(vec)
+  minVec = min(vec)
+  return(data.frame(maxVec, minVec))
+}
+
+out <- minMax(1, 2, 3)
+out$maxVec
+out$minVec
+```
+
+```{r}
+x <- matrix(c(1:1000), nrow=100)
+head(x, 3)
+##      [,1] [,2] [,3] [,4] [,5] [,6] [,7] [,8] [,9] [,10]
+## [1,]    1  101  201  301  401  501  601  701  801   901
+## [2,]    2  102  202  302  402  502  602  702  802   902
+## [3,]    3  103  203  303  403  503  603  703  803   903
+dim(x)
+```
+
+```{r}
+maxX = rep(0, 10)
+
+for(i in 1:10) {
+  maxXx = max(x[,i])
+  maxX[i] = maxXx
+}
+maxX
+
+apply(x, MARGIN=2, FUN=max)
+```
+
+```{r}
+die = c(1:6)
+dieRes = rep(0, 1000)
+
+for(i in 1:1000) {
+  set.seed(2000)
+  s1 = sample(die, size = 1, replace = FALSE)
+  s2 = sample(die, size = 1, replace = FALSE)
+  dieRes[i] = min(s1, s2)
+}
+```
+

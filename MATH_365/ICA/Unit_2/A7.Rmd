@@ -1,0 +1,42 @@
+
+## Math 365 / Comp 365: Activity 7
+## Matrix Norm Exercises
+
+In all exercises, assume that $A$ is an $n \times n$ matrix with real entries, and $u,v,$ and $x$ are column vectors in $\mathbb{R}^n$.
+
+### Exercise 1: Equivalence of different norms
+a) Prove that 
+$$ ||x||_{\infty} \leq ||x||_2 \leq  ||x||_1.$$
+b) Prove that 
+$$ ||x||_{\infty} \leq ||x||_2 \leq \sqrt{n} ||x||_{\infty}.$$
+
+c) Use part b) to prove that
+$$ \frac{||A||_2}{\sqrt{n}} \leq ||A||_{\infty} \leq \sqrt{n} ||A||_2 $$
+
+### Exercise 2: Equivalent definitions of a matrix norm
+Prove formally that
+
+$$ \max_{x \in \mathbb{R}^n\hbox{ s.t. } x \neq 0} \left\{\frac{{||Ax||}_p}{||x||_p}\right\} =\max_{x\in \mathbb{R}^n\hbox{ s.t. }||x||_p=1} \left\{||Ax||_p\right\}.$$
+
+
+
+### Exercise 3: The $\infty$-matrix norm is the maximum absolute row sum
+
+Prove that
+$$ ||A||_{\infty}=\max_{1 \leq i \leq n}\left\{ \sum_{j=1}^n |A_{ij}| \right\}.$$
+
+### Exercise 4: An application of the Cauchy-Schwarz Ineqality
+
+a) Prove the Cauchy-Schwarz Inequality in $\mathbb{R}^n$:
+$$|u^T v| = |\langle u, v \rangle| \leq ||u||_2 ||v||_2.$$
+
+- Hint: Write $u$ as a sum of the projection of $u$ onto $v$ and a vector orthogonal to $v$, and then recall our old friend Pythagoras.
+
+- Note 1: Equality holds if and only if $u=\alpha v$ (the two vectors are linearly dependent).
+
+- Note 2: A generalization of Cauchy-Schwarz is  Holder's Inequality:
+$$|u^T v| \leq ||u||_p ||u||_q,\hbox{ where } 1\leq p,q \leq \infty\hbox{ and }\frac{1}{p}+\frac{1}{q}=1.$$
+
+b) Let $A=uv^T$ (an outer product). Use the Cauchy-Schwarz Inequality to prove that
+$$ ||A||_2 \leq ||u||_2 ||v||_2.$$
+

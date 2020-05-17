@@ -1,0 +1,132 @@
+
+## Math 365 / Comp 365: Activity 15
+## Best Approximation and Chebyshev Interpolation
+
+```{r,message=FALSE}
+require(Matrix)
+source("C:/Users/lziegel1/Google Drive/Teaching/Math Comp 365/365Functions.r")
+```
+
+In `365Functions.r`, I have included a function `Interpolator` that does polynomial interpolation using either the Vandermonde matrix (as you should have written in Activity 14) or Newton's divided difference method. 
+
+**Question 1**
+
+Here is the function $f(x) = \frac{1}{1+2x}$ on the interval $[0,10]$: 
+```{r}
+f=function(x){1/(1+2*x)}
+a = 0
+b = 10
+xx = seq(a,b,length=1000)
+yf=f(xx)
+plot(xx,yf,type='l',xlab="x",ylab="y",xlim=c(a,b),ylim=c(0,1),col='black',lwd=2)
+```
+
+a) Use 5 evenly spaced nodes on the interval [0,10] (the 5 points should include the two endpoints of the interval) to generate a polynomial interpolant $p_{e5}(x)$ of $f(x)$ on this interval (you can use my `Interpolator.r` function). Make a plot with the graph of the function $f(x)$ in black, the graph of the interpolating polynomial in blue, and the 5 interpolating points in red.
+
+```{r}
+Vandermonde = function(x) {
+  n = length(x)
+  
+  # Method 1: a for loop
+  #  V = matrix(0,nrow=n, ncol=n)
+  #  for (j in 1:n)
+  #    V[,j] = x^(j-1)
+  
+  # Method 2: an outer product (a little cleaner)
+  V=outer( x, 0:(n-1), `^` )
+  return(V)
+}
+
+VandermondeInterpolator = function(x,y) {
+  n = length(x)
+  V = Vandermonde(x)
+  c = solve(V,y)
+  p = function(z) { 
+    Horner(c,z)
+    #c %*% z^(0:(length(c)-1)) this alternative is just fine as well
+  }  
+  xx = seq(min(x)-1,max(x)+1,length=1000)
+  yy=p(xx)
+  plot(xx,yy,type='l',col='blue',xlab="x",ylab="y")
+  points(x,y,pch=20,col='red')  
+  return(list(coeffs=c,interpolant=p))
+}
+
+Horner = function(coeffs,x,b=rep(0,length(coeffs))) {
+  y = coeffs[length(coeffs)]
+  for (i in (length(coeffs)-1):1) {
+    y = y*(x-b[i])+coeffs[i] 
+  }
+  return(y)
+}
+
+NewtonDD = function(x,y,ddtable=FALSE) {
+  n = length(x)
+  v = matrix(0,nrow=n,ncol=n)
+  v[,1] = y
+  for (i in 2:n) {
+    for (j in 1:(n+1-i)) {
+      v[j,i] = (v[j+1,i-1]-v[j,i-1])/(x[j+i-1]-x[j])
+    }
+  }
+  if (ddtable) print(v)
+  return(v[1,])
+}
+
+Interpolator = function(xi,yi,xx,Itype = 'NewtonDD') {
+  if (Itype == 'NewtonDD') {
+    c = NewtonDD(xi,yi)
+    return(Horner(c,xx,xi))
+  }
+  if (Itype == 'Vandermonde') {
+    V = Vandermonde(xi)
+    c = solve(V,yi)
+    if (length(xx)==1)
+      return (c %*% xx^(0:(length(c)-1)))
+    else
+      return(Horner(c,xx))
+  }
+}
+```
+
+
+```{r}
+x1 = seq(0, 10, length=5)
+y1 = f(x1)
+r1 = VandermondeInterpolator(x1, y1)
+r11 = Interpolator(x2, y2, xx)
+plot(xx,yf,type='l',xlab="x",ylab="y",xlim=c(a,b),ylim=c(0,1),col='black',lwd=2)
+points(x1, y1, col="red")
+lines(xx, r11, type="l", col="blue")
+```
+
+b) Repeat part a) with 10 evenly spaced nodes on the interval [0,10].
+
+```{r}
+x2 = seq(0, 10, length=10)
+y2 = f(x2)
+r2 = VandermondeInterpolator(x2, y2)
+r22 = Interpolator(x2, y2, xx)
+plot(xx,yf,type='l',xlab="x",ylab="y",xlim=c(a,b),ylim=c(0,1),col='black',lwd=2)
+points(x2, y2, col="red")
+lines(xx, r22, type="l", col="blue")
+```
+
+
+c) Find the zeros of a degree 5 Chebyshev polynomial (shifted and stretched to cover the interval [0,10]). Repeat part a) using these 5 nodes to generate a polynomial interpolant $p_{c5}(x)$ of $f(x)$ on this interval (you can again use my `Interpolator` function).
+
+
+
+d) Repeat part c) with the zeros of a degree 10 Chebyshev polynomial.
+
+e) Compare the errors $||f-p||_{\infty}$ for each of these four approximating polynomials on the interval $[0,10]$. You can approximate these errors by finding the maximum absolute value of the differences between the function and the approximating polynomial on the 1000 evenly spaced points you used to plot the function. Here is an example:
+```
+err = yf - yc5
+print("Chebyshev Degree 5 Error:")
+print(max(abs(err)))
+```
+
+f) Show the errors from parts b) and d) on a single plot. Comment on the plot.
+
+g) On a single plot, show the errors from parts b) and d) divided by the function values `yf`. Comment on the plot.
+

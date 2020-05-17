@@ -1,0 +1,217 @@
+---
+title: "Logistic Regression"
+author: "Lawson Busch"
+date: "10/11/2018"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r}
+library(fivethirtyeight)
+library(ggplot2)
+library(dplyr)
+data(bechdel)
+?bechdel
+```
+
+# Introduction to the Data
+
+To model binary by year, we can't use the lm function because binary is categorical.
+
+```{r}
+# bechdel_bin <- bechdel %>%
+#   mutate(binary = )
+# binary_year <- lm(binary ~ year, data = bechdel)
+```
+
+```{r}
+binary_graph <- bechdel %>%
+  group_by(year) %>%
+  filter(binary == "PASS") %>%
+  summarize(pass = n())
+
+ggplot(binary_graph, aes(x = year, y = pass)) + geom_point()
+```
+
+# Excercises
+
+## Excercise 1
+
+### 1a)
+
+```{r}
+roll_3_p <- (4/6)
+odds_roll_3 = roll_3_p/(1 - roll_3_p)
+odds_roll_3
+```
+
+### 1b)
+```{r}
+roll_e = 0.5
+odds_roll_e = roll_e/(1-roll_e)
+odds_roll_e
+```
+### 1c)
+
+```{r}
+roll_1_2 = 1 - roll_3_p
+odds_1_2 = roll_1_2/(1-roll_1_2)
+odds_1_2
+```
+
+## Excercise 2
+
+### 2a)
+
+To map a logistic model, we use family = "binomial".
+```{r}
+binary_mod <- glm(factor(binary) ~ year, bechdel, family="binomial")
+summary(binary_mod)
+```
+
+### 2b)
+
+$$log(odds) = -41.55+0.02*year$$
+
+### 2c)
+
+The first two equations are equivalent because we simply raise each side to the power of e, removing the natural log. We then equate the second equation to the third by dividing by the odds plus one, giving us the probability.
+
+## Excercise 3)
+
+### 3a)
+
+```{r}
+# Predictions on log(odds) scale    
+log_pred <- predict(binary_mod, newdata = data.frame(year = bechdel$year))
+
+# Predictions on odds scale (NOTE: exp(2) calculates e^2)
+odds_pred <- exp(log_pred)
+
+# Predictions on probability scale    
+prob_pred <- predict(binary_mod, newdata = data.frame(year = bechdel$year), type = "response")
+
+# Include the 3 sets of predictions in the data    
+bechdel <- bechdel %>% 
+    mutate(log_pred = log_pred, odds_pred = odds_pred, prob_pred = prob_pred)
+```
+
+### 3b)
+
+```{r}
+bechdel[26,] %>% 
+    select(log_pred, odds_pred, prob_pred)
+## # A tibble: 1 x 3
+##   log_pred odds_pred prob_pred
+##      <dbl>     <dbl>     <dbl>
+## 1  0.00294      1.00     0.501
+```
+
+### 3c)
+
+```{r}
+# Plot the log(odds) model  
+ggplot(bechdel, aes(x=year, y=log_pred)) + 
+    geom_smooth(se=FALSE) + 
+    labs(y="log(odds of passing the test)")
+
+# Plot the odds model  
+ggplot(bechdel, aes(x=year, y=odds_pred)) + 
+    geom_smooth(se=FALSE) + 
+    labs(y="odds of passing the test")
+
+# Plot the probability model
+ggplot(bechdel, aes(x=year, y=prob_pred)) + 
+    geom_smooth(se=FALSE) + 
+    labs(y="probability of passing the test")
+
+# We could also do this without calculating the predictions first!!
+ggplot(bechdel, aes(x=year, y=(as.numeric(as.factor(binary))-1))) +
+    geom_smooth(method="glm", method.args=list(family="binomial"), se=FALSE) + 
+    labs(y="probability of passing the test")
+
+#...and zoom out to see the s shape
+ggplot(bechdel, aes(x=year, y=(as.numeric(as.factor(binary))-1))) +
+    geom_smooth(method="glm", method.args=list(family="binomial"), se=FALSE, fullrange=TRUE) + 
+    labs(y="probability of passing the test") + 
+    lims(x=c(1800,2200))
+```
+
+The relationship between binary and year improves as we move forward in time. However, it is not as good as we would inititally expect, as the probability of a moving passing the Bechdel test in 2010 onwards is only 50%, which is lower than I expected. However, it is still an improvement from the initial 30%.
+
+## Excercise 4
+
+### 4a)
+
+```{r}
+interpreted_e = exp(0.020647)
+interpreted_e
+```
+
+From this we can see that the odds of a movie passing the bechdel test in any given year are 1.02 times higher than the odds of the previous year.
+
+### 4b)
+
+```{r}
+log_odds_year <- lm(log_pred ~ year, data = bechdel)
+summary(log_odds_year)
+```
+
+From the P value in the year row, we can conclude that we can reject the null hypothesis that year is not related to the odds of a moving passing the bechdel test.
+
+### 4c)
+
+The intercept does not have any contextual meaning in this case because it is the log odds of a movie released in year 0.
+
+## Excercise 5
+
+```{r}
+bechdel <- bechdel %>% 
+    mutate(bigbudget=(budget_2013 > median(budget_2013)))
+```
+
+
+### 5a)
+
+```{r}
+bechdel_mod2 <- glm(factor(binary) ~ bigbudget, bechdel, family="binomial")
+summary(bechdel_mod2)
+```
+
+```{r}
+#Setting bigbudget = true predicts for all values in bigbudget
+prob_pred <- predict(bechdel_mod2, newdata = data.frame(bigbudget = TRUE), type = "response")
+prob_pred
+```
+The probability that a movie with a bigbudget passes the bechdel test is 0.38.
+
+
+### 5b)
+```{r}
+#Setting bigbudget = true predicts for all values in bigbudget
+prob_pred <- predict(bechdel_mod2, newdata = data.frame(bigbudget = FALSE), type = "response")
+prob_pred
+```
+
+The probability that a movie with a small budget passes the bechdel test is 0.51.
+
+## Excercise 6)
+
+### 6a)
+
+On the log scale, we see that a movie moving from a small budget to a big budget decreases its log(odds) by -0.57. The intercept is the odds of a movie with a small budget passing the bechdel test.
+
+```{r}
+interpreted_int = exp(0.07328)
+interpreted_int
+interpreted_bud = exp(-0.57874)
+interpreted_bud
+```
+
+On the odds scale, we see that a movie with a big budget is 0.56 times as likely to pass the bechdel test as a movie with a small budget. 
+
+### 6b)
+
+From the p-value on the bigbudget true coefficient, we can conclude that we can reject the null hypothesis that having a big budget does not affect a movies likeliness of passing the bechdel test.

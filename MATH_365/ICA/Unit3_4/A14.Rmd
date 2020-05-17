@@ -1,0 +1,86 @@
+
+## Math 365 / Comp 365: Activity 14
+## Polynomial Interpolation
+
+```{r,message=FALSE}
+require(Matrix)
+```
+
+**Question 1**
+
+a. Write a function `Vandermonde(x)` that takes a sequence of interpolation points (just the $x_i$ values) and returns the Vandermonde matrix for that sequence. Hint: what does the following code do and why?
+```{r}
+outer(1:3,1:3)
+outer(1:3,1:3,`^`)
+```
+
+```{r}
+Vandermonde = function(x) {
+  n = length(x)
+  V = outer(x, 0:(n-1), `^`)
+  return(V)
+}
+```
+
+
+b. Try running `V=Vandermonde(1:5)`. What is the condition number of $V$?
+
+```{r}
+V = Vandermonde(1:5)
+print(V)
+# Condition number of a matrix
+Cond = function(A,p=2) {
+  if (p == 2) {  # by default use the 2-norm
+    s = svd(A)$d
+    s = s[s>0]
+    return(max(s)/min(s))
+  }
+  if (p == 1) {  # use the 1 norm
+    Ainv = solve(A)
+    return(max(colSums(abs(A)))*max(colSums(abs(Ainv))))
+  }
+  if (p == 'I') {   # use the infinity norm
+    Ainv = solve(A)
+    return(max(rowSums(abs(A)))*max(rowSums(abs(Ainv))))
+  }
+}
+
+Cond(V)
+```
+
+The condition number of V is 26169.69, which is not good.
+
+**Question 2**
+
+Write a second function `VandermondeInterpolator(x,y)` that takes a sequence of interpolation points and values (both the $x_i$ and $y_i$ values) and i) returns a list containing both the coefficients of the polynomial interpolant (ordered from the constant term up to the degree n-1 term) and a function for evaluating the polynomial interpolant for the given values, and ii) plots both the points and interpolation function on the same graph. You can use the built-in `solve` function to solve the $Ax=b$ problem.
+
+```{r}
+Horner = function(coeffs,x,b=rep(0,length(coeffs))) {
+  y = coeffs[length(coeffs)]
+  for (i in (length(coeffs)-1):1) {
+    y = y*(x-b[i])+coeffs[i] 
+  }
+  return(y)
+}
+
+
+VandermondeInterpolator = function(x,y) {
+  V = Vandermonde(x)
+  C = solve(V, y)
+  H = Horner(C, x)
+  plot(x, y)
+  
+  return(List(C=C, H=H))
+}
+```
+
+
+**Question 3**
+
+Consider the points (-2,0), (-1,14), (2,-4), (3,10). Find the degree 3 (i.e., the highest order term is $cx^3$) interpolating polynomial p(x) for these points in two different ways. 
+
+a) Use your `VandermondeInterpolator` function from Question 2. 
+
+b) By hand, find the interpolating polynomial using Newton's divided differences.  You need to multiply it out to see that you are getting the same answer as above.
+
+Note: You can also find the same interpolating polynomial using Lagrange interpolation. I won't ask you to do this, but you should at least look at Lagrange interpolation and see how the algebra would yield the same solution. 

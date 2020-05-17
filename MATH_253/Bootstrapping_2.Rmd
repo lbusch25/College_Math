@@ -1,0 +1,329 @@
+---
+title: "Homework 4"
+author: "Lawson Busch"
+date: "10/2/2018"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+#Excercise 1
+
+```{r}
+# Load the package
+library(fivethirtyeight)
+library(dplyr)
+library(ggplot2)
+library(broom)
+library(infer)
+
+# Load the data
+data("nfl_fandom_google")
+
+# Check out the first 6 rows
+head(nfl_fandom_google)
+
+# Examine the codebook
+?nfl_fandom_google
+```
+
+## Excercise 1a)
+
+A Designated Market Area is an area where a population recieves roughly the same TV and radio broadcasts, and possibly other media such as newspapers. These market areas for a sports team would be the are where the team is locally broadcast.
+
+## Excercise 1b)
+
+```{r}
+library(dplyr)
+library(tidyverse)
+```
+
+```{r}
+# Reshape the data
+sports <- nfl_fandom_google %>% 
+    gather(activity, market_share, -c(dma, trump_2016_vote)) %>% 
+    mutate(trump_2016_vote = as.numeric(as.character(trump_2016_vote)),             
+        market_share = as.numeric(as.character(market_share)),
+        activity = as.factor(activity)) %>% 
+    mutate(activity = factor(activity, levels = levels(activity)[c(5,3,7,6,1,4,2)]))
+
+# Plot the data
+ggplot(sports, aes(y=market_share, x=trump_2016_vote)) +
+    geom_point() +
+    facet_grid(~ activity) +
+    geom_smooth(method = "lm", se = FALSE, color = "blue")
+```
+
+From this visualization, we can see that the NBA, MLB, and NHL have less popularity in DMA's where Trump won a higher percentage of the 2016 vote, and more popularity in DMA's in areas where Trump won a smaller percentage of the 2016 vote. Conversely, we see that College Basketball, College Football, and Nascar have more popularity in DMA's where Trump won a higher percentage of the 2016 vote, and less popularity in DMA's in areas where Trump won a smaller percentage of the 2016 vote. Right in the middle is the most popular of all these sports, the NFL, which has roughly the same popularity in DMA's where Trump won a high percentage of the 2016 vote as ares where Trump won a low percentage of the 2016 vote.
+
+## Excercise 1c)
+
+Here are the six market areas where the NBA enjoys its greatest popularity.
+```{r}
+nba_pop <- nfl_fandom_google %>%
+  arrange(desc(nba))
+
+head(nba_pop$dma)
+```
+
+## Excercise 1d)
+
+```{r}
+nfl_fandom_google <- nfl_fandom_google %>% 
+    mutate(trump_win = trump_2016_vote > 50)
+
+head(nfl_fandom_google)
+```
+
+To calculate the mean interest by DMA's that trump won for both the NBA and NFL:
+
+```{r}
+nfl_nba_interest <- nfl_fandom_google %>%
+  group_by(trump_win) %>%
+  summarize(nfl_interest = mean(nfl), nba_interest = mean(nba))
+
+head(nfl_nba_interest)
+```
+
+From this we can see that the NFL has roughly the same interest in DMA's that Trump won vs DMA's that Trump lost, while the NBA has a stronger interest in DMA's that Trump lost vs DMA's that Trump won. This corresponds with my findings in section 1b.
+
+# Excersize 2
+
+## Part 2a)
+
+```{r}
+nba_mod <- lm(nba ~ trump_2016_vote, nfl_fandom_google)
+summary(nba_mod)
+```
+
+## 2b)
+
+First, the assumption of independence holds because while there are geographic trends, the nba popularity as well as the trump_2016_vote do not depend on the values from any other instance of data. Thus, they are independant.
+
+To check the observation of trend and homoskedasticity we can plot the residuals of the model against the predictions:
+
+```{r}
+nba_output <- data.frame(
+    predicted = nba_mod$fitted,
+    residual  = nba_mod$residual)
+```
+
+```{r}
+ggplot(nba_output, aes(y = residual, x = predicted)) + 
+    geom_point() + 
+    geom_hline(yintercept = 0)
+```
+
+From the above plot we can see that the assumption of homskedasticity holds, because the redisduals do not begin to diverge from 0 at any point, indicating that this model is homoskedastic. We can also see that the assumption of trend holds because the points are scattered evenly above and below 0.
+
+To check the assumption of normality we can create a q-q plot of the residuals:
+
+```{r}
+# Q-Q plot of residuals
+ggplot(nba_output, aes(sample = residual)) + 
+    geom_qq()
+```
+
+Because the QQ plot of the residuals is roughly a strait line, we can conclude that the assumption of normality holds.
+
+## Excercise 2c)
+
+To calculate the standard error:
+
+```{r}
+CI_high <- -0.17853 + 1.96*0.02891
+CI_low <- -0.17853 - 1.96*0.02891
+CI_low
+CI_high
+```
+
+Using the pieces from the summary table, we can see that our confidence interval (between 2.5% and 97.5%) lies between -0.2351936 and -0.1218664.
+
+To check this calculation we can use confint(nba_mod):
+
+```{r}
+confint(nba_mod)
+```
+
+This demonstrates that our calculation is accurate.
+
+## Excercise 2d)
+
+From this confidence interval, we can say that we are 95% confident that the true mean of the $\hat{\beta_1}$ coefficient for the population falls between -0.2355309 and -0.1215335.
+
+# Excercise 3
+
+## Excercise 3a)
+
+To generate the samples:
+
+```{r}
+set.seed(253)
+nba_resamples <- rep_sample_n(nfl_fandom_google, size = nrow(nfl_fandom_google), replace = TRUE, reps = 1000)
+```
+
+To generate 1000 models:
+
+
+```{r}
+nba_bootstrap_models <- nba_resamples %>%
+  group_by(replicate) %>%
+  do(lm(nba ~ trump_2016_vote, data = .) %>% tidy())
+```
+
+## Excercise 3b)
+
+The heads of the resamples and models:
+
+```{r}
+head(nba_resamples)
+head(nba_bootstrap_models)
+```
+
+Plotting all 1000 models:
+```{r}
+ggplot(nba_resamples, aes(x = trump_2016_vote, y = nba, group = replicate)) + 
+    geom_smooth(method = "lm", se = FALSE)
+```
+
+# Excercise 4
+
+## Excercise 4a)
+
+To access the data for the slopes:
+
+```{r}
+nba_bootstrap_slopes <- nba_bootstrap_models %>%
+  filter(term == 'trump_2016_vote')
+head(nba_bootstrap_slopes)
+```
+
+```{r}
+ggplot(nba_bootstrap_slopes, aes(x=estimate)) + geom_histogram(color = 'white')
+```
+
+## Excercise 4b)
+
+To get the mean of the slopes:
+```{r}
+mean(nba_bootstrap_slopes$estimate)
+```
+
+We can see that this mean is close to the original least squares estimate of -0.1785.
+
+To get the standard deviation of the slopes:
+```{r}
+sd(nba_bootstrap_slopes$estimate)
+```
+
+Which is also close to the s.e reported in the summary table of the lm() model of 0.02891.
+
+## Excercise 4c)
+
+```{r}
+quantile(nba_bootstrap_slopes$estimate, c(0.025, 0.975))
+```
+
+From the above, we can see that our 95% confindence interval for our 1000 bootstrap models falls between -0.2345971 and -0.1206482.
+
+# Excercise 5
+
+## Excercise 5a)
+
+To get the null slopes we can simply subtract the mean:
+```{r}
+slopes <- nba_bootstrap_slopes$estimate
+null_slopes <- slopes - mean(slopes)
+null_slopes <- as.data.frame(null_slopes)
+```
+
+And to plot the histogram:
+```{r}
+ggplot(null_slopes, aes(x=null_slopes)) + geom_histogram(color = 'white') + geom_vline(xintercept = -0.17853)
+```
+
+The vertical line represents our observed sample slope. Because it doesn't fall within the null distribution, we can conclude that we can reject the null hypothesis that trump_2016_vote does not have any correlation on nba.
+
+## 5b)
+
+Since a p-value is the probability of seeing a more extreme value than our observed sample slope, we can calculate the p-value by summing the null slopes that are < our observed value, and then divide by the number of elements:
+```{r}
+null_slopes_diff <- null_slopes %>%
+  filter(null_slopes < -0.17853)
+abs(sum(null_slopes_diff$null_slopes)/nrow(null_slopes))
+```
+
+This is equal to 0, which matches what we expected.
+
+## 5c)
+
+With a different one sided hypothesis, we shift null_slopes further:
+
+```{r}
+null_slopes_2 <- null_slopes - 0.2
+ggplot(null_slopes_2, aes(x=null_slopes)) + geom_histogram(color = 'white') + geom_vline(xintercept = -0.17853)
+```
+
+So then we can calculate the p-value for this by the same manner. Note, in this case we use > our observed mean because the mean for our hypothesis grouping is < our observed mean:
+```{r}
+null_slopes_diff_2 <- null_slopes_2 %>%
+  filter(null_slopes < -0.17853)
+abs(sum(null_slopes_diff_2$null_slopes)/nrow(null_slopes_2))
+```
+
+And we can see that the p-value for our new one-sided hypothesis is 0.1627633.
+
+## Excercise 5d)
+
+From the above p-value, we can see that the probability of getting a value greater than our observed mean of -0.17853 is 16.27%. We can also see that our model is statistically significant since the p-value is greater than 0.05, and thus we can reject the null hypothesis.
+
+# Excercise 6)
+
+Plotting the lm model:
+
+```{r}
+ggplot(nfl_fandom_google, aes(x = trump_2016_vote, y = nba)) + 
+    geom_point() + 
+    geom_smooth(method = "lm")
+```
+
+```{r}
+predict(nba_mod, newdata = data.frame(trump_2016_vote = 20), interval = "confidence")
+##        fit      lwr      upr
+## 1 28.96651 26.87786 31.05516
+```
+
+## Excercise 6a)
+
+To predict the NBA interest for areas where Trump got 20% of the vote:
+```{r warning = FALSE, message = FALSE}
+boot_predictions_20 <- nba_resamples %>%
+  do(predict(lm(nba ~ trump_2016_vote, data = .), newdata = data.frame(trump_2016_vote = 20)) %>% tidy())
+```
+
+To calculate the 95% confidence interval for our prediction:
+```{r warning = FALSE, message = FALSE}
+quantile(boot_predictions_20$x, c(0.025, 0.975))
+```
+
+And we can see that 95% confidence interval for our bootstrap_predictions_20 model falls between 26.8 and 31.1.
+
+## Excercise 6b)
+
+To predict the NBA interest for areas where Trump got 70% of the vote:
+```{r warning = FALSE, message = FALSE}
+boot_predictions_70 <- nba_resamples %>%
+  do(predict(lm(nba ~ trump_2016_vote, data = .), newdata = data.frame(trump_2016_vote = 70)) %>% tidy())
+```
+
+To calculate the 95% confidence interval for our prediction:
+```{r warning = FALSE, message = FALSE}
+quantile(boot_predictions_70$x, c(0.025, 0.975))
+```
+
+And we can see that 95% confidence interval for our bootstrap_predictions_20 model falls between 19.06 and 21.1.
+
+## Excercise 6c)
+
+This is significant evidence that the typical NBA interest is greater in areas where Trump won 20% of the vote than areas where Trump won 70% of the vote because the confidence intervals for our two models do not overlap, and the interval for DMA's where Trump won 20% of the vote is higher than the interval where Trump won 70% of the vote.

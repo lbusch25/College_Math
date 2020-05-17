@@ -1,0 +1,130 @@
+---
+title: "Subset Selection"
+author: "Lawson Busch"
+date: "9/20/2018"
+output: html_document
+---
+
+```{r}
+bf <- read.csv("http://www.macalester.edu/~ajohns24/data/bodyfatsub.csv")
+
+# Take out the REDUNDANT Density and HeightFt variables
+library(dplyr)
+bf <- bf %>% 
+    select(-c(Density, HeightFt))
+```
+
+## full model
+
+```{r}
+full_model <- lm(BodyFat ~ Age + Weight + Height + Neck + Chest + Abdomen + Hip
+  + Thigh + Knee + Ankle + Biceps + Forearm + Wrist, bf)
+
+summary(full_model)
+```
+
+When looking at this model, we can see that Abdomen, Wrist, and Age we see them as the only significant predicors.
+
+```{r}
+no_knee <- lm(BodyFat ~ Age + Weight + Height + Neck + Chest + Abdomen + Hip
+  + Thigh + Ankle + Biceps + Forearm + Wrist, bf)
+
+summary(no_knee)
+```
+
+```{r}
+no_knee_weight <- lm(BodyFat ~ Age + Height + Neck + Chest + Abdomen + Hip
+  + Thigh + Ankle + Biceps + Forearm + Wrist, bf)
+
+summary(no_knee_weight)
+```
+
+Now we can see neck and height are also significant.
+
+```{r}
+no_knee_weight_ankle <- lm(BodyFat ~ Age + Height + Neck + Chest + Abdomen + Hip
+  + Thigh + Biceps + Forearm + Wrist, bf)
+
+summary(no_knee_weight_ankle)
+```
+
+After this we can see that Age, Height, Neck, Abdomen, and Wrist are statistically significant in this model. This does not necessarily mean that Wrist is a better predictor than weight, because weight might be colinear with another predictor. For example, if you only had weight and wrist, weight would probably be significant.
+
+We eliminate variables one at a time instead of all not statistically significant variables because as we elminate variables, other variables can become statistically significant, helping us get a better overall picture of which variables are important (and how different predictors interact).
+
+I would guess that in forward selection you pick the predictor you think is most likely to be significant, and then continuosly add predictors to your model to see how it changes.
+
+```{r}
+# Load the leaps package
+library(leaps)
+
+# Do backward stepwise selection
+# nvmax=13 indicates that we want results for all models from size 1 to 13 (all possible  predictors)
+back_step <- regsubsets(BodyFat ~ ., bf, method = "backward", nvmax = 13)
+
+# Store the summary information
+back_summary <- summary(back_step)
+back_summary
+```
+
+The last variable in the model is Abdomen.
+
+```{r}
+# Coefficients of each model (here the model with 7 predictors)    
+coef(back_step, 7)
+
+# Adjusted R^2 values for each model    
+back_summary$adjr2
+```
+
+The adjusted $R^2$ value for the model that is just abdomen is .677, but with Abdomen, Wrist, and height we get a not too complex model with an adjust $R^2$ of .729.
+
+
+```{r}
+coef(back_step, 1)
+back_summary$adjr2[1]
+back_summary$adjr2[13]
+```
+
+```{r}
+plot_data <- data.frame(size = 1:13, adjr2 = back_summary$adjr2)
+ggplot(plot_data, aes(x = size, y = adjr2)) + 
+    geom_point() + 
+    geom_line() + 
+    labs(x="subset size", y="Adjusted R-squared")
+```
+
+This plot supports my previous selection of the three variable model.
+
+## Best subset selection
+
+Make all possible models of $P$ variables, and find the best one. (AKA A FUCKLOAD OF WORK)
+Typically use $R^2$ as measurement of choice.
+
+```{r}
+# Perform best subsets
+best_subsets <- regsubsets(BodyFat ~ ., bf, nvmax = 13)
+
+# Store the summary information
+best_summary <- summary(best_subsets)
+best_summary
+```
+
+The only syntax that changed is the type of summary we take. From this new summary, we can see that the best three predictors are abdomen, weight, and wrist, in that order.
+
+```{r}
+plot_data <- data.frame(size = 1:13, adjr2 = best_summary$adjr2)
+ggplot(plot_data, aes(x = size, y = adjr2)) + 
+    geom_point() + 
+    geom_line() + 
+    labs(x="subset size", y="Adjusted R-squared")
+```
+
+From this, I think the optimal subset size is three, as it is the last "large" jump in increased $R^2$. I would then use the best three predictors of wrist, weight, and abdomen.
+
+Backward Selection is was less computationally intensive, but will provide less accurate results than the best subset method.
+
+```{r}
+#Final model
+coef(best_subsets, 3)
+```

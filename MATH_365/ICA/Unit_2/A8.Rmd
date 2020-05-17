@@ -1,0 +1,32 @@
+## Math 365 / Comp 365: Activity 8
+## Conditioning and Stability
+
+**Question 1**. Compute by hand the eigenvalues of the matrices 
+$$A=\begin{bmatrix} 1 & 1000 \\ 0 & 1\end{bmatrix}~\hbox{  and  } ~\tilde{A}=\begin{bmatrix} 1 & 1000 \\ 0.001 & 1\end{bmatrix}.$$
+Remember eigenvalues can be found by solving the characteristic equation of the matrix, $\det(A-\lambda I)=0$. Would you say that the problem of computing eigenvalues (for nonsymmetric matrices) is well-conditioned or ill-conditioned?
+
+
+**Question 2**. Let $x = \left[ \begin{array}{c}
+1000 \\ 
+3*10^{154} \\ 
+5 \\
+4*10^{154} \\
+10^{100} \\
+1
+\end{array}
+\right].$
+
+a) Compute the length of the vector $x$ in R using the 2-norm (below). Report what happens. Can you explain why?
+$$||x||_2 = \sqrt{ x_1^2 + x_2^2 + \cdots + x_n^2}.$$ 
+
+```{r}
+x = c(1000, 3*10^154, 5, 4*10^154,10^100, 1)
+
+```
+
+
+b) Can you circumvent this issue somehow in order to calculate $||x||_2$?
+
+
+**Question 3**. Use the quadratic formula and R to find both roots of $x^2+(8^{13})*x = 8$. Are the computed roots correct? If not, what caused the problem? Can you think of another way to compute the roots more accurately? You can also try with $a=1$, $b=100000$, and $c=1$. Make sure to use a command like `options(digits=20)`.
+

@@ -1,0 +1,224 @@
+---
+title: "Hierarchical Clustering"
+author: "Lawson Busch"
+date: "11/27/2018"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+# Officially in Unsupervised Learning
+
+Supervised learning - some output variable y, whether we are doing regression (quantitative) or classification (categorical) prediction. Everything that we have done up to this point - how are x values linked to y?
+
+
+Unsupervised learning - no response variable y. Goal is not to make some sort of relationship between x and y, but rather to just understand and explore our data. Often used in the exploratory phase to understand the structure of the data.
+
+```{r}
+library(ggplot2)
+irises <- data.frame(Width = c(2.5,2.7,3.2,3.5,3.6), 
+                     Length = c(5.5,6.0,4.5,5.0,4.7))
+irises
+##   Width Length
+## 1   2.5    5.5
+## 2   2.7    6.0
+## 3   3.2    4.5
+## 4   3.5    5.0
+## 5   3.6    4.7
+ggplot(irises, aes(x = Width, y = Length)) + 
+    geom_point() + 
+    geom_text(aes(label = c(1:5)), vjust = 1.5)
+```
+
+
+```{r}
+dist(irises)
+```
+
+From the above we can see that the flowers five and four are the most similar. We can also see that five and three are pretty similar as well as two and one.
+
+Note, as we start combining into clusters, we use the the maximum value in the cluster as the distance. So for the second step, our first node is 1.4 away from the cluster of 4&5. If we continue on this path, we will see that the next closest node pair is 1 and 2 at 0.53.
+
+We can then see that node three is 0.6 away from node 4&5 and 1.6 away from node 1&2, so we merge 3 with 4&5 at 0.6. We then merge the cluster of 3&(4&5) with cluster 1&2 at 1.6.
+
+My diagram matches the below calculated in R.
+
+```{r}
+library(tree)
+iris_cluster <- hclust(dist(irises))
+plot(iris_cluster)
+```
+
+# Excercises Part 1
+
+```{r}
+library(fivethirtyeight)
+library(dplyr)
+data("hate_crimes")
+?hate_crimes
+```
+
+Removing crime rates so that we can discover structure among the fifty states.
+```{r}
+state_data <- hate_crimes %>% 
+    dplyr::select(-c(hate_crimes_per_100k_splc, avg_hatecrimes_per_100k_fbi))
+```
+
+## 1)
+
+The types of variables remaining are all quantitative. Thus we we are trying to identify structure amongst states with similar values.
+
+## 2)
+
+NOTE: Heat map - Dark pink is higher than average, blue is lower than average, white is average.
+
+Note: When finding the distance between clusters, we used Complete Linkage. That means that we use the maximum distance between any two leaves in that branch.
+
+Single Linkage: Using the minimum distance between two leaves in the branches.
+
+Average Linkage: Average distance between leaves in each branch.
+
+Centroid Linkage: The distance branch 1 & branch 2 is the distance between their centroids (centers of the leaves in the branch).
+
+By default we use Complete Linkage.
+
+```{r}
+# Turn state variable into row names
+state_sub <- state_data %>% 
+    dplyr::select(-state)
+rownames(state_sub) <- state_data$state
+
+# Heatmap of scaled data
+heatmap(data.matrix(scale(state_sub)), 
+        Colv = NA, scale = "column", col = cm.colors(256))
+
+# Dendrogram of scaled data
+state_cluster <- hclust(dist(scale(state_sub)))
+plot(state_cluster, cex = 0.8)
+```
+
+I would guess that we are scaling the data so that the data operates on an easier to compute scale for the algorithm.
+
+## 3)
+
+### 3a)
+
+I would say that there appear to be four natural clusters among the states. The big one on the left with District of columbia, the cluster with the South. The cluster with Alaska. The cluster with the Dakotas. 
+
+### 3b)
+
+New Hampshire, Utah, Iowa, Wisconsin, Alaska, Missouri, Michigan, Pennsylvania, Delaware, Colorade, and Virginia.
+
+### 3c)
+
+Minnesota is more similar to Alaska than West Virginia.
+
+## 4)
+
+### 4a)
+
+```{r}
+# Sort states into 3 clusters
+cluster_3 <- as.factor(cutree(state_cluster, 3))
+cluster_3
+
+# Sort states into 6 clusters
+cluster_6 <- as.factor(cutree(state_cluster, 6))
+cluster_6
+
+# Add 3 cluster and 6 cluster assignments to state_sub
+state_sub <- state_sub %>% 
+    mutate(cluster_3, cluster_6)
+
+# Check it out
+head(state_sub)
+```
+
+### 4b)
+
+```{r}
+library(choroplethr)
+library(choroplethrMaps)
+rownames(state_sub) <- state_data$state
+
+# Map the 3 cluster assignments
+maps <- state_sub %>% 
+    add_rownames("region") %>% 
+    mutate(region = tolower(region), value = factor(cluster_3)) %>% 
+    dplyr::select(region, value)
+state_choropleth(maps, num_colors = 3, title = "3 clusters")
+
+# Map the 6 cluster assignments
+maps <- state_sub %>% 
+    add_rownames("region") %>% 
+    mutate(region = tolower(region), value = factor(cluster_6)) %>% 
+    dplyr::select(region, value)
+state_choropleth(maps, num_colors = 6, title = "6 clusters")
+```
+
+Cluster 1 is the south. Cluster 2 is the midwest with Utah, Alaska, Virginia, and Colorado. Cluster 3 is the west coast, georgia, florida, and new england. Four is just DC, which makes sense to be alone since it is not a state. Five is Hawaii, Delaware, and Maryland. 6 Is the rural midwest.
+
+### 4c)
+
+```{r}
+state_sub %>%
+    group_by(as.factor(cluster_3)) %>%
+    summarize_at(vars(-cluster_3), funs(mean(., na.rm=TRUE))) %>%
+    data.frame()
+
+state_sub %>%
+    group_by(as.factor(cluster_6)) %>%
+    summarize_at(vars(-cluster_6), funs(mean(., na.rm=TRUE))) %>%
+    data.frame()
+```
+
+## Excerise 5)
+
+Cluster 1 is the south. Cluster 2 is the midwest with Utah, Alaska, Virginia, and Colorado. Cluster 3 is the west coast, georgia, florida, and new england. Four is just DC, which makes sense to be alone since it is not a state. Five is Hawaii, Delaware, and Maryland. 6 Is the rural midwest.
+
+
+# Excercises Part two
+
+```{r}
+library(fivethirtyeight)
+data("nfl_fav_team")
+?nfl_fav_team
+```
+
+```{r}
+# Turn state variable into row names
+team_sub <- nfl_fav_team %>% 
+    dplyr::select(-team)
+rownames(team_sub) <- nfl_fav_team$team
+
+# Heatmap of scaled data
+heatmap(data.matrix(scale(team_sub)), 
+        Colv = NA, scale = "column", col = cm.colors(256))
+
+# Dendrogram of scaled data
+team_cluster <- hclust(dist(scale(team_sub)))
+plot(team_cluster, cex = 0.8)
+```
+
+From the above there appear to be four natural clusters for nfl teams. From my knowledge of NFL teams based on both team composition, attributes, and location I cannot make sense of the clustering right off the bat. So I will define the clusters and look at it more closely.
+
+```{r}
+cluster_4 <- as.factor(cutree(team_cluster, 4))
+cluster_4
+
+team_sub <- team_sub %>% 
+    mutate(cluster_4)
+
+head(team_sub)
+```
+
+Now that we can see the clusters, I will look at the means to see if I can determine why the teams are clustered the way they are.
+
+```{r}
+team_sub %>% 
+    group_by(as.factor(cluster_4)) %>% 
+    summarize_at(vars(-cluster_4), funs(mean(., na.rm=TRUE))) %>% 
+    data.frame()
+```
+

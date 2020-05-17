@@ -1,0 +1,328 @@
+---
+title: "Team Project 2"
+author: Raven McKnight, Lawson Busch, Ximena Silva-Avila
+output: 
+ html_document:
+   toc: true
+   toc_float: true
+---
+
+```{r message = FALSE}
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(maps)
+library(usmap)
+library(ggrepel)
+library(geosphere)
+```
+```{r message = FALSE}
+flights  <- read_csv("https://www.macalester.edu/~ajohns24/data/flights.csv")
+airlines <- read_csv("https://www.macalester.edu/~dshuman1/data/112/flights/airlines.csv")
+airports <- read_csv("https://www.macalester.edu/~dshuman1/data/112/flights/airports.csv")
+```
+
+
+## Introduction
+
+In this report, we want to explore the flights data set to determine if we can predict whether or not a flight will be delayed. In part one, we arrange and explore our data to get a sense of the number of flights that are delayed, cancelled, or on time. In part two, we build a model that predicts flights as ontime, delayed, or cancelled, and discuss why this is a difficult problem. Lastly, in part three we build on part two, and attempt to quantitatively predict the length of a delay for a given flight.
+
+## Part 1
+
+```{r}
+# typical difference between actual & scheduled arrive times
+mean(na.omit(flights$ARRIVAL_DELAY))
+min(na.omit(flights$ARRIVAL_DELAY))
+max(na.omit(flights$ARRIVAL_DELAY))
+```
+
+We see that the mean arrival delay for the flights in our data set is 4.36 minutes, the minimum arrival delay is arriving 80 minutes early, and the maximum arrival delay is arrival delay is 1463 minutes late.
+
+We want to see which flights are ontime, delayed, and cancelled within our data set. We will define "ontime" as within 15 minutes of the predicted arrival time. 
+
+```{r}
+# new categorical variable
+flights <- flights %>%
+ mutate(delay_cancel = if_else(is.na(ARRIVAL_DELAY), "cancelled", (if_else(ARRIVAL_DELAY<=abs(15), "ontime", "delayed"))))
+```
+
+The table below displays the number of flights which are cancelled, delayed, and on time as well as the proportion of the flights in each group. 
+
+```{r}
+prop <- flights %>%
+ count(delay_cancel)
+prop <- prop%>%
+ mutate(prop = n/nrow(flights))
+
+prop
+```
+
+The following map illustrates all of these flights. 
+
+```{r}
+# Create dataset with ony Origin and Destination airport codes
+flights_mod <- flights %>%
+ arrange(flights$ORIGIN_AIRPORT) %>%
+ select(ORIGIN_AIRPORT, DESTINATION_AIRPORT)
+
+# create new dataset without the airports with numerical airport codes because they do not have corresponding values in airports$IATA_CODE
+flights_mod <- flights_mod[8404:100000,]
+# remoe the duplicate flights
+flight_mod <- unique(flights_mod[, 1:2])
+# modify dataset to be able to store the longitude and latitude values
+flight_mod <- flight_mod %>%
+ mutate(Lat_from = NA, Lon_from = NA, Lat_to = NA, Lon_to = NA)
+
+#fix all the airports that were missing coordinates
+airports$LATITUDE[314] = 29.9544
+airports$LONGITUDE[314] = -81.3429
+
+airports$LATITUDE[97] = 30.3578
+airports$LONGITUDE[97] = -85.7938
+
+airports$LATITUDE[235] = 26.8234
+airports$LONGITUDE[235] = -80.1387
+
+# parse through the data and assign the appropriate latitude and longitude values based on the IATA codes and information in airports dataset for both Origin Airport and Destination Airport
+for (i in 1:dim(flight_mod)[1]){
+ for (j in 1:322){
+   if (flight_mod$ORIGIN_AIRPORT[i] == airports$IATA_CODE[j]){
+     flight_mod$Lat_from[i] = airports$LATITUDE[j]
+     flight_mod$Lon_from[i] = airports$LONGITUDE[j]
+   }
+ }
+ for (k in 1:322){
+   if (flight_mod$DESTINATION_AIRPORT[i] == airports$IATA_CODE[k]){
+     flight_mod$Lat_to[i] = airports$LATITUDE[k]
+     flight_mod$Lon_to[i] = airports$LONGITUDE[k]
+   }
+ }
+
+}
+
+# Create an environment to map all the data points onto
+# xlim and ylim values set to include Hawaii and Alaska to the west and Puerto Rico to the east 
+usmap1 <- map("world", fill=T, col="grey8", bg="grey15",
+             xlim=c(-170.0,-65.0) ,ylim=c(0,72.0)
+             )
+# Map all the airports onto the usmap1 environment 
+points(airports$LONGITUDE,airports$LATITUDE, pch=3, cex=0.1, col="chocolate1")
+# title for our plot
+title(main = "All unique flight patterns in data set", col.main = "white")
+# parsed through all the data points and create curved splines connecting Origin and Departure airports
+for (x in 1: 4259){
+ inter <- gcIntermediate(c( flight_mod$Lon_from[x],flight_mod$Lat_from[x]), 
+                         c( flight_mod$Lon_to[x], flight_mod$Lat_to[x]), 
+                         n = 150)
+ lines(inter, lwd=0.06, col="turquoise2")
+}
+```
+
+## Part 2
+
+Our goal is to implement a model that predicts whether or not a flight will be on time, cancelled or delayed. To do this, we first take a smaller sample of our original data set to speed up the model building process. 
+
+```{r}
+set.seed(253)
+small_flights <- sample_n(flights, size = 1000, replace = FALSE)
+```
+
+Our first instinct was to drop any predictors from the original flight data set that were redundant or did not factor into our investigation. This included variables such as ARRIVAL_DELAY, which is just ARRIVAL_TIME - SCHEDULED_ARRIVAL, and the plane's tail number. This significantly decreased the number of predictors in our model. We also decided to remove airports, as it consisted of over 300 seperate categorical predictors, and slowed down our computation time significantly. 
+
+Next, we decided that the best tool would predict whether a flight would be delayed or cancelled based solely on information that is available pre-flight, such as day, time, airline, etc. This meant dropping all of the predictors from the data set that had to do with delayed time. We decided to drop these predictors because 1) they are only available post flight, so you can't use them to predict if a flight will be delayed before take-off, and 2) if there is delay data, we know the flight was delayed and our model becomes redundant. 
+
+This left us with a set of predictors which includes what we call "ticket" information: only the information available on a boarding pass. However, we quickly realized that this information could not be used to predict delays, as none of the predictors were strong enough to categorize a flight as on time, delayed or cancelled. To demonstrate this, we have included plots of our flights data sample. Below is a plot of the delay_cancel variable by day of week, as a percentage of the data:
+
+```{r}
+library(ggplot2)
+ggplot(small_flights, aes(x=DAY_OF_WEEK, fill=delay_cancel)) + geom_bar(position="fill")
+```
+
+The plot above illustrates that, regardless of the day of the week, roughly the same percentage of flights are on time, cancelled, or delayed. This indicates that day of the week is a weak predictor. We can see a similar pattern with airlines below.
+
+```{r}
+ggplot(small_flights, aes(x=AIRLINE, fill=delay_cancel)) + geom_bar(position="fill")
+```
+
+Time of day, too, is a weak predictor. While it is somewhat stronger than airline or day of the week, it does not explain any significant varability in our delay_cancel variable. 
+
+```{r}
+ggplot(small_flights, aes(x=SCHEDULED_TIME, fill=delay_cancel)) + geom_histogram(color="white")
+```
+
+In our data exploration, we discovered that each of our "ticket" predictors performed poorly. A model with only these predictors would have been nearly useless.  To counter this, we decided to include one more predictor: TAXI_OUT. We decided to include TAXI_OUT because it is a preflight variable that does not necessarily correspond to a delay (as every flight needs a taxi), and it enabled us to make a tree that incorporates the other predictors. 
+
+```{r}
+flightsM <- small_flights %>% 
+ select(c(-YEAR, -DAY, -FLIGHT_NUMBER, -TAIL_NUMBER, -ORIGIN_AIRPORT, -DESTINATION_AIRPORT, -DEPARTURE_TIME, -DEPARTURE_DELAY, -WHEELS_OFF, -ELAPSED_TIME, -AIR_TIME, -WHEELS_ON, -TAXI_IN, -ARRIVAL_TIME, -ARRIVAL_DELAY, -DIVERTED, -CANCELLATION_REASON, -CANCELLED, -AIR_SYSTEM_DELAY, -SECURITY_DELAY, -AIRLINE_DELAY, -LATE_AIRCRAFT_DELAY, -WEATHER_DELAY)) 
+```
+
+To make our tree:
+
+```{r}
+library(rpart)
+library(randomForest)
+
+tree_1 <- rpart(delay_cancel ~., flightsM)
+tree_1
+plot(tree_1, margin = 0.2)
+text(tree_1, cex = 0.8)
+```
+
+From the diagram we can see that the TAXI_OUT variable dominates this tree. If your taxi takes 37.5 or more minutes, your flight is likely to be delayed. However, it also allows us to see cutoffs for other variables, such as: flights under 1,390 miles are likely to be ontime, and that flights in the early months of the year (the winter) are more likely to be delayed than flights in later months. Overall, we can see that the flights least likely to be delayed are short flights later in the year which depart early on weekdays and have short taxi times. 
+
+It is important to note that our model never predicts a flight as cancelled. This is likely due to the fact that only 1.6% of flights are cancelled. Additionally, none of our predictors have a strong enough relationship with flight cancellation to predict cancellation accurately.  
+
+Lastly, we want to evaluate the accuracy of this model. To do this we will take another random testing sample (with a different seed) from our original flights data. We will use this data to evaluate our model. 
+
+```{r}
+set.seed(2000)
+small_flights_test <- sample_n(flights, size = 1000, replace = FALSE)
+
+pred_1 <- predict(tree_1, newdata = small_flights_test, type = "class")    
+true <- small_flights_test$delay_cancel
+
+res <- table(pred_1, true)
+res
+```
+
+As discussed above, we can see that our model does not predict cancelled flights at all. The models overall accuracy is found below. 
+
+```{r}
+sum(diag(res)) / nrow(small_flights_test)
+```
+
+Our model it accurately classifies 81.3% of flights! Breaking this down further:
+
+```{r}
+delayed_acc <- 25 / (25 + 134)
+ontime_acc <- 788 / (33 + 788)
+delayed_acc
+ontime_acc
+```
+
+We can see that our model predicts 0% of cancelled flights correctly, 15.7% of delayed flights correctly and 95.9% of ontime flights correctly. In other words, our model is great at predicting ontime flights but less reliable for predicting delayed flights (and incapable of predicting cancelled flights!).
+
+Below, we can see the flight patterns of each unique delayed, cancelled, and on time flight.
+
+```{r}
+# Create new data set 
+flights_mod_1 <- flights %>%
+ arrange(ORIGIN_AIRPORT) %>%
+ select(delay_cancel, ORIGIN_AIRPORT, DESTINATION_AIRPORT)
+# Include all the data points except the data with numeric airport codes
+flights_mod_1 <- flights_mod_1[8404:100000,]
+# Remove duplicates and then NA values
+flight_mod_1<- unique(flights_mod_1[, 1:3])
+flight_mod_1 <- na.omit(flight_mod_1)
+# Modify dataset to be able to store coordinate values
+flight_mod_1 <- flight_mod_1 %>%
+ mutate(Lat_from = NA, Lon_from = NA, Lat_to = NA, Lon_to = NA)
+
+# Include coordinate values from airports dataset 
+for (i in 1:8625){
+ for (j in 1:322){
+   if (flight_mod_1$ORIGIN_AIRPORT[i] == airports$IATA_CODE[j]){
+     flight_mod_1$Lat_from[i] = airports$LATITUDE[j]
+     flight_mod_1$Lon_from[i] = airports$LONGITUDE[j]
+   }
+ }
+ for (k in 1:322){
+   if (flight_mod_1$DESTINATION_AIRPORT[i] == airports$IATA_CODE[k]){
+     flight_mod_1$Lat_to[i] = airports$LATITUDE[k]
+     flight_mod_1$Lon_to[i] = airports$LONGITUDE[k]
+   }
+ }
+
+}
+
+# Seperate data based on the delay_cancel value
+late_flight <- flight_mod_1 %>%
+ filter(delay_cancel == "delayed")
+ontime_flight <- flight_mod_1 %>%
+ filter(delay_cancel == "ontime")
+cancel_flight <- flight_mod_1 %>%
+ filter(delay_cancel == "cancelled")
+
+# Create environment like before
+usmap1 <- map("world", fill=T, col="grey8", bg="grey15",
+             xlim=c(-170.0,-65.0) ,ylim=c(0,72.0)
+             )
+# Airports
+points(airports$LONGITUDE,airports$LATITUDE, pch=3, cex=0.1, col="chocolate1")
+# Information for viewer/reader
+title(main = "Flight patterns of on time, delayed, and cancelled flights", col.main = "white")
+legend("topright", legend = c("delayed", "ontime", "cancelled"), fill = c("red", "blue", "green"), border = "black", bg = "grey8", text.col = "white")
+# Plot all the paths, changing color depending on delay_cancel value
+for (x in 1:3371){
+ inter <- gcIntermediate(c(late_flight$Lon_from[x],late_flight$Lat_from[x]), 
+                         c( late_flight$Lon_to[x], late_flight$Lat_to[x]), 
+                         n = 150)
+ lines(inter, lwd=0.2, col= "red")
+}
+for (y in 1: 4165){
+ inter1 <- gcIntermediate(c( ontime_flight$Lon_from[y],ontime_flight$Lat_from[y]), 
+                         c( ontime_flight$Lon_to[y], ontime_flight$Lat_to[y]), 
+                         n = 150)
+ lines(inter1, lwd=0.1, col= "blue")
+}
+for (z in 1: 1065){
+ inter <- gcIntermediate(c( cancel_flight$Lon_from[z],cancel_flight$Lat_from[z]), 
+                         c( cancel_flight$Lon_to[z], cancel_flight$Lat_to[z]), 
+                         n = 150)
+ lines(inter, lwd=0.06, col= "green")
+}
+```
+
+
+## Part 3
+
+Now, we would like to not only anticipate if a flight will be cancelled, delayed, or ontime but also predict how early or late a flight will be. Before constructing a model, we modifiy our data to include variables of importance. These variables were selected by the same process discussed in Part 2. The predictors used in Part 3 are printed below. 
+```{r}
+flightsN <- small_flights %>% 
+ select(c(-YEAR, -DAY, -FLIGHT_NUMBER, -TAIL_NUMBER, -ORIGIN_AIRPORT, -DESTINATION_AIRPORT, -DEPARTURE_TIME, -DEPARTURE_DELAY, -WHEELS_OFF, -ELAPSED_TIME, -AIR_TIME, -WHEELS_ON, -TAXI_IN, -ARRIVAL_TIME, -DIVERTED, -CANCELLATION_REASON, -CANCELLED, -AIR_SYSTEM_DELAY, -SECURITY_DELAY, -AIRLINE_DELAY, -LATE_AIRCRAFT_DELAY, -WEATHER_DELAY, -delay_cancel))
+colnames(flightsN)
+```
+
+Next, we used the Best Subset model selection method. This method allows us to determine how many and which predictors will produce the best model. We determined the best model by its Adjusted R-Squared value. We can see from the plot of the Adjusted R-Squared below that we can maximize the effectiveness of our model by using 5 predictors, marked by the vertical red line. We chose not to use more predictors to avoid running the risk of overfitting our data, rending our model useless for prediction on new data. 
+
+```{r}
+library(leaps)
+
+best_sub <- regsubsets(ARRIVAL_DELAY ~ ., flightsN, really.big = TRUE, nvmax = 9)
+best_sub_sum <- summary(best_sub)
+
+plot_data <- data.frame(size = 1:9, adjr2 = best_sub_sum$adjr2)
+ggplot(plot_data, aes(x = size, y = adjr2)) + 
+   geom_point() + 
+   geom_line() + 
+   geom_vline(xintercept = 5, col = "red")
+   labs(x="subset size", y="Adjusted R-squared")
+```
+
+Now that we have determined how many predictors to use in our model, we can build a model using these five predictors. The predictors in our model are month, airline, scheduled departure, taxi out and scheduled time. These predictors correspond with those we chose in Part 2. 
+
+```{r}
+best_sub_sum$outmat[5,]
+
+best_mod <- lm(ARRIVAL_DELAY ~ MONTH + AIRLINE + SCHEDULED_DEPARTURE + TAXI_OUT + SCHEDULED_TIME, data = flightsN)
+summary(best_mod)
+```
+
+We can use the following equation to determine how late a flight will be : 
+$$ ARRIVAL\_DELAY = -10.04 * Month + 0.01* Scheduled\_Departure + 1 * Taxi\_Out - 0.04 * Scheduled\_Time$$
+$$- 2.53 * AirlineAS + 0.16 * AirlineB6 + 3 * AirlineDL + 6.63 * AirlineEV + 20.58 * AirlineF9 $$
+$$- 1.30 * AIrlineHA + 1.32 * AirlineMQ + 14.54 * AirlineNK + 4.33 * AirlineOO + 3.87 * AirlineUA$$
+$$- 14.28 * AirlineUS - 0.65 * AirlineVX + 5.80 * AirlineWN $$
+
+It is important to note here that the "AirlineXX" variables in our equation take binary values where "0" is associated with $\bf{not}$ flying this airline and "1" is the value associate with flying that airline. 
+
+The adjusted R squared value for this model is 0.072, which means that our model only explains 7.2% of the variability present in the data. This is horrendous. However, when taken in context of predicting delayed flights, this makes sense. In part two, we explained why it is so difficult to predict if a flight will be delayed. With that context, it only makes sense that it is very difficult to predict the length of the delay using the same set of variables, as we struggling solely predicting the delay in the first place. Overall, this model is not very helpful.
+
+Our model is consistent with our findings in Part 2; the time of the year you fly as well taxi time, scheduled time of departure, and length of the flight will affect how delayed your flight is. We can also see that flying AirlineF9, Frontier Airlines, significantly increases anticipated delay time. 
+
+## Conclusion
+
+In summary, predicting whether or not a flight will be delayed is very difficult to do using only the data available preflight. This is because none of these variables are strongly correlated with a delay occuring, and many of them have roughly the same rates of delays and cancels across all levels of their variables. This makes it tricky to predict if a flight will be delayed.
+
+However, in part two we were able to build a model that was extremely good at predicting if a flight will be on time, with an accuracy rate of 95%, and still correctly identified 25% of delayed flights. While this model isn't perfect, it is still useful in predicting delayed flights, as it selects 25% of them correctly, and very good at predicting on time flights. Our model in part three was not as successful, as it only explained 7.2% of the variability present in our data, but overall we identified a useful classification tool for determining if a flight will be delayed.

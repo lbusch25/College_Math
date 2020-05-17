@@ -1,0 +1,301 @@
+---
+title: "Exam 2 Review"
+author: "Lawson Busch"
+date: "12/4/2018"
+output: html_document
+---
+
+# Packages and data
+
+```{r warning = FALSE, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(MASS)
+library(leaps)
+library(rpart)
+library(randomForest)
+library(boot)
+library(tree)
+library(broom)
+library(infer)
+library(FNN)
+```
+
+Load the data:
+```{r}
+data_cnn <- read.csv("https://www.macalester.edu/~ajohns24/Data/ushouse_midterms_18.csv")
+data_538 <- read.csv("https://www.macalester.edu/~ajohns24/Data/ushouse_trump_score.csv")
+```
+
+Join the data:
+```{r}
+election_data <- left_join(data_cnn, data_538)
+
+# Compare the dimensions of our data
+dim(data_cnn)
+## [1] 436  11
+dim(data_538)
+## [1] 442   4
+dim(election_data)
+## [1] 442  14
+```
+
+Simplified Data
+```{r}
+election_data <- election_data %>% 
+    filter(!is.na(D_votes), !is.na(trump_margin_2016), !is.na(R_percent)) %>% 
+    filter(winner != "neither") %>% 
+    mutate(winner = droplevels(winner))
+```
+
+
+Defining more variables:
+```{r}
+election_data <- election_data %>% 
+    mutate(flip = factor(winner != incumbent_party), 
+        incumbent_16_18 = factor(paste0(incumbent_party,incumbent)),
+        total_votes = D_votes + R_votes) %>% 
+    dplyr::select(-c(incumbent, incumbent_party)) %>% 
+    filter(incumbent_16_18 %in% c("DD","Dneither","Rneither","RR")) %>% 
+    mutate(incumbent_16_18 = droplevels(incumbent_16_18))
+```
+
+
+# Excercises Part 1 -  Which Task?
+
+## 1.
+
+Goal 1: Clustering.
+
+Goal 2: Regression.
+
+Goal 3: Classification.
+
+# Excercises Part 2 - Common Themes
+
+## 2.
+
+### a)
+
+Our intuition is that we should drop the names of the candidates. This is because we don't think that the names will be useful in clustering, as they shouldn't be related. We also want to drop raceid (since it has a lot of categories) and D_votes and R_votes as they are redundant.
+
+### b)
+
+```{r}
+goal_1_data <- election_data %>% 
+    dplyr::select(-D_name, -R_name, -raceid,  -D_votes, -R_votes)
+```
+
+
+## 3.
+
+We can use either hierarchical clustering or k means clustering to explore this data.
+
+## 4.
+
+### a)
+
+First we want to scale our data. Then we can implement hierarchical clustering.
+```{r}
+scaled_goal_1_data <- scale(data.matrix(goal_1_data))
+
+# Heatmap of scaled data
+heatmap(scaled_goal_1_data, 
+        Colv = NA, scale = "column", col = cm.colors(256))
+
+# Cluster Dendrogram
+hc <- hclust(dist(scaled_goal_1_data))
+plot(hc)
+```
+
+From the dendrogram, we can see that there are approximately 4 main clusters. From looking at the heat map, I would guess that these clusters are centered around winner primarily, and then trump score. But it is hard to tell from our labels.
+
+### b)
+
+```{r}
+k_4 <- kmeans(scaled_goal_1_data, centers = 4)
+
+goal_1_data %>% 
+    mutate(k_clust = k_4$cluster) %>% 
+    group_by(k_clust) %>% 
+    summarize(sum(D_gender=="female"), 
+        sum(R_gender=="female"), mean(R_percent),
+        sum(winner=="R"),mean(incumbent_trump_score),
+        mean(trump_margin_2016), sum(flip==TRUE))
+```
+
+
+
+From the k_means clustering, it appears our four clusters are female candidates in republican districts (cluster 1). Female candidates in democratic districts (cluster 2). Male candidates in republican districts (cluster 3) and male candidates in democratic districts (cluster 4).
+
+
+Overall, it appears that the hierarchical clustering and the k_means clustering had similar results.
+
+## 5.
+
+### a)
+
+Hierarchical clustering starts with the closest possible pair and groups them. It then groups the next closest possible pair. It continues doing this as it builds up clusters, until eventually the whole group is clustered. K_means does it opposite, it starts with all data points and clusters them. It then continually refines these clusters until they can no longer be improved (this is done by calculating the distance between elements in the cluster). K means also does not easily identify the number of natural clusters in your data, but works great if you already know the number of natural clusters.
+
+### b)
+
+K_means will evenly cluster you data into the number of clusters that you specify. Thus, it will produce the best tight clusters for the number that you are looking for. However, a drawback is that you lose information about closeness of individual data points when using K_means clustering, as it only easily gives information for clusters as a whole.
+
+Hierarchical clustering tends to not be super evenly distributed, as it is build from the ground up instead of the top down. However, it is much easier to tell closeness between specific data points and identify the number of natural clusters in your data set using hierarchical. So while it may be harder to interpret, it does give an overall picture of the data (and individual relationships) quickly and easily.
+
+# Excercises Part 2 - Republican Popularity
+
+## 6.
+
+### a)
+
+```{r}
+ggplot(election_data,aes(y=R_percent, x= trump_margin_2016)) + geom_point()
+```
+
+From the above we can R_Percent increases with trump_margin_2016.
+
+```{r}
+ggplot(election_data,aes(y=R_percent, x= incumbent_trump_score)) + geom_point()
+```
+
+We can clearly see two groupings. One with low incumbent_trump_score, likely democractic districts, and one with high incumbent_trump_score, likely republican districts. Unsurprisingly, districts with a low incumbent_trump_score tend to have a low R_percent and districts with a high incumbent_trump_score tend to have a high R_percent.
+
+```{r}
+ggplot(election_data,aes(y=R_percent, x= trump_margin_2016, shape = incumbent_16_18, color = incumbent_16_18)) + geom_point(alpha = 0.5)
+```
+
+```{r}
+ggplot(election_data,aes(y=R_percent, x= trump_margin_2016, shape = incumbent_16_18, color = incumbent_16_18, size = incumbent_trump_score)) + geom_point(alpha = 0.4)
+```
+
+### b)
+
+```{r}
+R_popularity_model <- lm(R_percent ~ trump_margin_2016 + incumbent_trump_score + incumbent_16_18, data = election_data)
+summary(R_popularity_model)
+```
+
+The main takaways form this model (and the above graphs) is that incumbent_trump_score is the least important predictors when predicting the outcome of the 2018 elections. The most important variables are acutally trump_margin_2016 and incumbent16_18RR, while incumbent_16_18Dneither is important as well. These strongly affect the value of the various data points. 
+
+## 7.
+
+### a)
+
+The estimated model formula would be:
+
+$$Rpercent = 43.9 + 0.41*trumpMargin2016 - 0.02*incumbentTrumpScore+3.12*incumbent1618Dneither + 3.7*incumbent1618Rneither + 7.4*incumbent1618RR$$
+
+This means that the baseline Rpercent is 43.9%, and that for every unit increase in trump_Margin_2016, the Rpercent is expect to increase by 0.41%. The rest of the variables can be interpreted in a similar manner.
+
+### b)
+
+To get the bootstrap confidence interval, we first need to resample the data to give us 1000 samples (this allows us to similate having data for the entire population).
+
+```{r}
+set.seed(253)
+election_resamples <- rep_sample_n(election_data, size = nrow(election_data), replace = TRUE, reps = 1000)
+```
+
+Then we want to generate our model for every data resample:
+
+```{r}
+election_bootstrap_models <- election_resamples %>%
+  group_by(replicate) %>%
+  do(lm(R_percent ~ trump_margin_2016 + incumbent_trump_score + incumbent_16_18, data = .) %>% tidy())
+```
+
+Then to get a confidence interval for a variable, we can group by those variables and calculate their standard deviation and mean:
+
+```{r}
+election_bootstrap_slopes <- election_bootstrap_models %>%
+  group_by(term) %>%
+  mutate(sd = sd(estimate)) %>%
+  mutate(mean = mean(estimate)) %>%
+  mutate(lower_c = quantile(estimate, c(0.025, 0.975))[1]) %>%
+  mutate(upper_c = quantile(estimate, c(0.025, 0.975))[2])
+head(election_bootstrap_slopes)
+```
+
+Thus, we can say that we are 95% confident that the true population value for each our our variables will fall between the lower_c and upper_c bounds.
+
+### c)
+
+The assumptions for this model are trend, normality, homoskedasticity, and independence. The assumption of independence holds, as the value for one column does not affect the value of any other column. 
+
+
+```{r}
+elections_output <- data.frame(
+    predicted = R_popularity_model$fitted,
+    residual  = R_popularity_model$residual)
+```
+
+Trend and homoskedasticity.
+
+```{r}
+ggplot(elections_output, aes(y = residual, x = predicted)) + 
+    geom_point() + 
+    geom_hline(yintercept = 0)
+```
+
+QQ plot of residuals to check normality.
+
+```{r}
+# Q-Q plot of residuals
+ggplot(elections_output, aes(sample = residual)) + 
+    geom_qq()
+```
+
+From this we can see that normality and trend are questionable at best.
+
+### d)
+
+
+## 8.
+
+### a)
+
+BEcause questionable, nonparametric.
+
+### b)
+
+```{r}
+#model.matrix separates categorical variables into 0-1 true/false values for each category
+knn_train = model.matrix(R_percent ~ trump_margin_2016 + incumbent_trump_score + incumbent_16_18, election_data)[,-1]
+
+percent_seq <- seq(0, 100, lenght = 1000)
+
+knn_elec <- knn.reg(train=knn_train, y=election_data$R_percent, k=2)
+```
+
+To choose my K:
+
+```{r}
+KNN_cv <- rep(0, 50)
+minCV = 100000000
+k = 1
+for(i in 1:50) {
+  knn_cv <- knn.reg(train=knn_train, y=election_data$R_percent, k=i)
+  KNN_cv[i] <- knn_cv$PRESS / nrow(election_data)
+  #you had i here needs to be 14
+  if(knn_cv$PRESS < minCV) {
+    k = i
+    minCV = knn_cv$PRESS
+  }
+}
+
+min(KNN_cv)
+k
+```
+
+We can see that k=18 is the K that minimizes our cross validation error.
+
+### c)
+
+To get the cross validation error for our linear model:
+
+```{r}
+R_popularity_model_2 <- glm(R_percent ~ trump_margin_2016 + incumbent_trump_score + incumbent_16_18, data = election_data)
+cv.glm(election_data, R_popularity_model_2, K = 10)
+```
+

@@ -1,0 +1,259 @@
+---
+title: "Classification Trees"
+author: "Lawson Busch"
+date: "11/13/2018"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+# Data and Packages
+
+```{r}
+library(ggplot2)
+library(dplyr)
+```
+
+```{r warning = FALSE, message = FALSE}
+land <- read.csv("https://www.macalester.edu/~ajohns24/data/land_cover.csv")
+
+land_sub <- land %>% 
+    filter(class %in% c("asphalt ","grass ","tree ")) %>% 
+    mutate(class = droplevels(class))
+```
+
+Train and test:
+```{r}
+set.seed(3)
+index <- sample(c(1:277), size = 222)
+train <- land_sub[index, ]
+test  <- land_sub[-index, ]
+```
+
+# Excercises
+
+## Excercise 1
+
+```{r warning = FALSE, message = FALSE}
+library(rpart)
+tree_0 <- rpart(class ~ NDVI, train)
+plot(tree_0, margin = 0.2)
+text(tree_0)
+```
+
+This tree matches up almost exactly with the sketch I drew for class example two, showing that the algorithm is trustworthy.
+
+```{r}
+ggplot(land_sub, aes(x = NDVI, fill = class)) + 
+    geom_density(alpha=0.5) + 
+    geom_vline(xintercept = -0.01) + 
+    geom_vline(xintercept = 0.235)
+```
+
+## Excercise 2
+
+```{r}
+tree_1 <- rpart(class ~ NDVI + Mean_G, train)
+tree_1
+summary(tree_1)
+```
+
+```{r}
+plot(tree_1, margin = 0.2)
+text(tree_1, cex = 0.8)
+```
+
+Image1: NVDI = -0.05, Mean_G = 175 is asphault.
+
+Image2: NDVI = 0.30, Mean_G = 215 is a tree.
+
+```{r}
+treeplot <- function(model){
+    x1 <- train$Mean_G
+    x2 <- train$NDVI
+    x1s <- seq(min(x1), max(x1), len = 100)
+    x2s <- seq(min(x2), max(x2), len = 100) 
+    testdata <- expand.grid(x1s,x2s) %>% 
+        mutate(class = predict(model, newdata = data.frame(Mean_G=Var1, NDVI=Var2), type = "class"))
+    ggplot(testdata, aes(x = Var1, y = Var2, color = class)) + 
+        geom_point() + 
+        labs(y = "NDVI", x = "Mean_G")
+}
+
+treeplot(tree_1)
+```
+
+## Excercise 3
+
+For the tree classification regions, they are all discrete squares or rectangels, and are larger, more continuous regions. This is not true for KNN, which has many subregions and is not all a square or rectangle.
+
+## Excercise 4
+
+The first rule of NVDI < -0.01 is the best possible rule because everything below that point is asphault, with only a handlful of trees/grass below this cutoff.
+
+The second split of NDVI < -0.245 is the next best cutoff because the vast majority of points where NDVI < -0.245 appear to be green, while the vast majority of points for NDVI >= -0.245 appear to be blue, creating a good split in the data.
+
+The third split of Mean_G >= 195.8 is the best because it shows a split between the remaining trees and grass. 
+
+The final split of NVDI < 0.325 helps separate our few remaining data points.
+
+## Excercise 5
+
+```{r}
+pred_1 <- predict(tree_1, newdata = test, type = "class")    
+true <- test$class
+
+table(pred_1, true)
+```
+
+The overall misclassification rate is 12/(8+28+19) = 0.2181818.
+
+Overall, this is a pretty good classification rule.
+
+## Excercise 6
+
+```{r}
+tree_1 <- rpart(class ~ NDVI + Mean_G, train)
+tree_2 <- rpart(class ~ NDVI + Mean_G, train, minbucket = 60)
+tree_3 <- rpart(class ~ NDVI + Mean_G, train, minbucket = 1, cp = -1)
+```
+
+```{r}
+plot(tree_1)
+treeplot(tree_1)
+
+plot(tree_2)
+treeplot(tree_2)
+
+plot(tree_3)
+treeplot(tree_3)
+```
+
+As we grow a classification tree, we get more accurate classifications. However, it quickly becomes more complicated and has a ton of nodes, making it harder to visualize and see what is going on. If we have too few nodes though, we quickly lose accuracy in the predictions of our data set (as seen in tree_2). As with KNN, there is likely a tradeoff between tree complexity and prediction accuracy.
+
+## Excercise 7
+
+I anticipate that tree_2 will have a worse classification rate than tree_1 and that three_3 will have a better classification rate than tree_1.
+
+```{r}
+pred_2 <- predict(tree_2, newdata = test, type = "class")    
+true <- test$class
+
+table(pred_2, true)
+
+pred_3 <- predict(tree_3, newdata = test, type = "class")    
+true <- test$class
+
+table(pred_3, true)
+```
+
+For tree_2, we see that the overall misclassification rate is (2 + 24)/(10 + 45) = 47%.
+
+For tree_3 we see that the misclassification rate is (8+7)/(55) = 27%. 
+
+So I was right about tree_2 and wrong about tree_3. I would guess that this is because tree_3 is overly comlplex.
+
+## Excercise 8
+
+We see that tree_3 keeps subdiving once increases in purity become insignificant. This causes the tree to be overfit and thus our model to be more inaccurate than tree_1. Similar to KNN, there is a sweet spot in number of tree divides (too little = underfit, too many = overfit).
+
+## Excercise 9
+
+```{r}
+table(land$class)
+## 
+##  asphalt  building       car  concrete     grass      pool    shadow  
+##        59       122        36       116       112        29        61 
+##     soil      tree  
+##        34       106
+```
+
+```{r}
+tree_big <- rpart(class ~ ., land)
+plot(tree_big, margin = 0.2)
+text(tree_big, cex = 0.8)
+```
+
+There are 13 terminal nodes in this tree. 
+
+```{r}
+tree_big$variable.importance
+```
+
+There are 10 predictors used in this tree. The most important predictors are NDVI, NDVI_40, NDVI_60, Mean_G and Bright_40.
+
+## Excercise 10
+
+```{r}
+plotcp(tree_big) #plots the cp parameter, which is the node purity
+printcp(tree_big)
+```
+
+From the above plot, I would pick a cp parameter of 0.015.
+
+```{r}
+tree_big_prune <- rpart(class ~ ., land, cp = 0.015)
+plot(tree_big_prune, margin = 0.2)
+text(tree_big_prune, cex = 0.8)
+```
+
+```{r}
+tree_big$variable.importance
+```
+
+Now, there are only 12 terminal nodes and we are only using 9 predictors. The most important predictors still remain the same. 
+
+```{r}
+tree_big_prune_ex <- rpart(class ~ ., land, cp = 0.079)
+plot(tree_big_prune_ex, margin = 0.2)
+text(tree_big_prune_ex, cex = 0.8)
+```
+
+We can see that with a higher cp cutoff, the tree changes a lot.
+
+## Excercise 11
+
+```{r}
+data(mtcars)
+?mtcars
+ggplot(mtcars, aes(x = wt, y = mpg)) + 
+    geom_point()
+```
+
+## 11a)
+
+```{r}
+tree_mpg <- rpart(mpg ~ wt, mtcars)
+```
+
+```{r}
+plot(tree_mpg, margin = 0.2)
+text(tree_mpg, cex = 0.8)
+```
+
+wt: 1 = mpg 29.
+wt:3 =  mpg = 19.8
+wt:5 = mpg = 14.7
+
+## 11c)
+
+This tree has 3 possible predictions for MPG.
+
+## 11d)
+
+```{r}
+ggplot(mtcars, aes(x = wt, y = mpg)) + 
+    geom_point() + 
+    geom_vline(xintercept = 2.393) + 
+    geom_vline(xintercept = 3.49)
+```
+
+## Excercise 12
+
+```{r}
+tree_mpg_all <- rpart(mpg ~ ., mtcars)
+plot(tree_mpg_all, margin = 0.2)
+text(tree_mpg_all, cex = 0.8)
+```
+

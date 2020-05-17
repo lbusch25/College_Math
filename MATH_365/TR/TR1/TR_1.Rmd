@@ -1,0 +1,142 @@
+---
+title: "Technical_Report_1"
+author: "Lawson Busch"
+date: "2/10/2018"
+output: html_document
+---
+
+## Problem 1
+
+```{r}
+
+D = function(f, delta=0.01) {
+    df = function(x) {
+      newx = ( f(x + delta) - f(x) ) / delta 
+      return(newx)
+    }
+  return(df)
+}
+```
+
+```{r}
+f = function(x) {x*exp(-x^2)}
+df = D(f)
+
+x = seq(-1,3,length=1000)
+
+plot(x,f(x),type='l',main="y = f(x)")
+grid()
+abline(0,0,col='blue')
+abline(v=0,col='blue')
+plot(x,df(x),type='l',main="dy/dx = f'(x)")
+grid()
+abline(0,0,col='blue')
+abline(v=0,col='blue')
+```
+
+## Problem 2
+
+```{r}
+Newton = function(f, x) {
+  df = D(f)
+  newX = x - f(x)/df(x)
+  for(i in 1:40) { #Do not need to do 40 iterations and should put a check for not change much in here
+    newX = newX - f(newX)/df(newX)
+  }
+  return(newX)
+}
+```
+
+## Problem 3
+
+Cannot just set delta to 0 because we would then divide by zero. 
+
+```{r}
+e = function(x) {
+  return(exp(x))
+}
+
+s2 = function(x) {
+  return(x^2)
+}
+
+xvec = rep(0, 10)
+for(i in 1:10) {
+  delta = 1/(10^i)
+  df = D(e, delta)
+  #df = D(s2, delta)
+  x = df(0)
+  print(x)
+  xvec[i] = x
+}
+
+iterations = seq(0,9)
+plot(iterations, xvec[1:10], type = 'p')
+```
+
+The optimal delta seems to be $1*10^{-6}$ as the accuracy seems to cap at 6 decimal points once we reach this value. 
+
+## Problem 4
+
+```{r}
+threePC = function(f, delta = 0.01) {
+    df = function(x) {
+    newx = (f(x+delta) - f(x-delta))/(2*delta)
+    return(newx)
+    }
+    return(df)
+}
+```
+
+```{r}
+f = function(x) {x*exp(-x^2)}
+df = threePC(f)
+
+x = seq(-1,3,length=1000)
+
+plot(x,f(x),type='l',main="y = f(x)")
+grid()
+abline(0,0,col='blue')
+abline(v=0,col='blue')
+plot(x,df(x),type='l',main="dy/dx = f'(x)")
+grid()
+abline(0,0,col='blue')
+abline(v=0,col='blue')
+```
+
+
+```{r}
+e = function(x) {
+  return(exp(x))
+}
+
+s2 = function(x) {
+  return(x^2)
+}
+
+deltaVec = rep(0,10)
+
+xvec = rep(0, 10)
+for(i in 1:10) {
+  delta = 1/(10^i)
+  deltaVec[i] = delta
+  df = threePC(e, delta)
+  #df = threePC(s2, delta)
+  x = df(0)
+  print(x)
+  xvec[i] = x
+}
+
+iterations = seq(0,9)
+plot(iterations, xvec[1:10], type = 'p')
+
+#Error plot for threePc
+exVal = 1
+evec = xvec[1:10] - exVal
+plot(deltaVec[1:5], evec[1:5], type = 'p')
+
+print(abs(evec))
+```
+
+
+

@@ -1,0 +1,164 @@
+---
+title: "Exam 1"
+author: Lawson Busch
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+
+
+
+\
+\
+
+
+## Getting started
+
+```{r}
+library(dplyr)
+library(infer)
+library(broom)
+
+# 85 complete sample counties
+not_the_data <- read.csv("https://www.macalester.edu/~ajohns24/data/counties_253.csv")
+counties     <- na.omit(not_the_data)
+```
+
+
+
+
+\
+\
+
+
+## EXERCISE 1
+
+
+My loop to calculate LOOCV for my model:
+```{r}
+loocv = rep(0, nrow(counties))
+for(i in 1:(nrow(counties))) {
+  train <- counties[-i,]
+  test <- counties[i,]
+  
+  model_train <- lm(growth ~ ., train)
+  model_test <- predict(model_train, newdata = data.frame(counties[i,]))
+  
+  test_observed <- test$growth
+  test_residuals <- test_observed - model_test
+  
+  mspe_test = mean(test_residuals^2)
+  loocv[i] = mspe_test
+}
+mean(loocv)
+```
+
+And checking using the cv.glm function:
+```{r}
+library(boot)
+counties_model_glm <- glm(growth ~ ., counties, family = "gaussian")
+counties_model_cv <- cv.glm(counties, counties_model_glm)
+counties_model_cv$delta
+```
+
+We see that my calculated loocv is correct.
+\
+\
+
+
+## EXERCISE 2
+
+
+My calculated loocv error is 837.0871, which matches the loocv error calculated by the cv.glm function.
+
+
+\
+\
+
+
+## EXERCISE 3
+
+
+
+
+```{r}
+counties <- counties %>%
+  mutate(population = density*area) %>%
+  mutate(spending_per_person = fed_spending / population)
+```
+
+
+
+
+
+
+
+\
+\
+
+
+## EXERCISE 4
+
+
+
+
+```{r}
+median(counties$spending_per_person)
+```
+
+
+Bootstrapping
+
+First take 1000 samples:
+```{r}
+set.seed(253)
+counties_resamples <- rep_sample_n(counties, size = nrow(counties), replace = TRUE, reps = 1000)
+```
+
+This gives us 1000 different "samples" of our data. So to find the new sample median for spending_per_person, we can first get the median for each of our resamples. 
+
+```{r}
+counties_medians <- counties_resamples %>%
+  group_by(replicate) %>%
+  summarize(mdn = median(spending_per_person))
+```
+
+We now have 1000 sample medians. We can then calculate and interpret a 95% confidence interval for the true population median by using the quantile function:
+
+```{r}
+quantile(counties_medians$mdn, c(0.025, 0.975))
+```
+
+Or we can say that we are 95% confident that the true spending_per_person population median (as calculated by our 1000 bootstrap samples) falls between 7.784047 and 8.977165 dollars per person.
+
+\
+\
+
+
+
+
+## EXERCISE 5
+
+
+We do not have enough evidence to support the claim that the government provides counties with more than 8 dollars per resident because our confidence interval falls between 7.78 and 8.97. So while the majority of our confidence interval's range is above 8 dollars, we cannot say that the government provides counties with more than 8 dollars per resident, because our confidence interval covers an area less than 8 dollars per resident.
+
+
+
+
+
+
+
+
+\
+\
+
+
+**THE END**
+
+Submit your knit HTML to Moodle!
+
+
+
+

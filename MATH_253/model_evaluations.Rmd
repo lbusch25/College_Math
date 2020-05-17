@@ -1,0 +1,315 @@
+---
+title: "Model Evaluation Assumptions"
+author: "Lawson Busch"
+date: "9/6/2018"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+```
+
+```{r}
+# Load the package
+library(fivethirtyeight)
+```
+
+```{r}
+# Load the data
+data("candy_rankings")
+
+# Check out the codebook 
+?candy_rankings
+
+# Give the data frame a shorter name
+#candy <- candy_rankings
+```
+
+```{r}
+candy <- candy_rankings
+```
+
+```{r}
+# Arrange from least to most popular
+candy %>% 
+    arrange(winpercent)
+candy %>% 
+    arrange(winpercent) %>% 
+    head()
+
+# Arrange from most to least popular
+candy %>% 
+    arrange(desc(winpercent))
+candy %>% 
+    arrange(desc(winpercent)) %>% 
+    head()
+```
+
+## DPLRY Excercises
+
+```{r}
+#Sad canties that won less than 30%
+candy %>%
+  filter(winpercent < 30)
+
+#Keep only dots
+candy %>% 
+  filter(competitorname == "Dots")
+
+#Keep only chocalte and peanutbutter
+
+candy %>%
+  filter(chocolate == TRUE) %>%
+  filter(peanutyalmondy == TRUE)
+
+candy %>%
+  filter(chocolate == TRUE && peanutyalmondy == TRUE)
+
+candy %>% 
+  filter(fruity == TRUE) %>%
+  arrange(desc(winpercent))
+```
+
+## 2 fitting models
+
+```{r}
+#Model of winpercent by sugarpercent
+model_1 <- lm(winpercent ~ sugarpercent, candy)
+coef(summary(model_1))
+```
+
+This is not a reasonable assumption since we are assuming that the relationship between winpercent and sugarpercent follows a linear trend. We could determine if these assumptions hold by plotting the data with the model, as well as checking residuals.
+
+## Visualizing data
+
+```{r}
+ggplot(candy, aes(x = winpercent)) + geom_density()
+ggplot(candy, aes(x = winpercent)) + geom_histogram()
+
+ggplot(candy, aes(x=sugarpercent, y = winpercent)) + geom_point() + geom_smooth(method = "lm")
+```
+
+With this information, our choice of model seems unreasonable.
+
+## 2.4 Checking model assumptions
+
+```{r}
+candy %>% 
+    filter(competitorname == "100 Grand") %>% 
+    select(competitorname, sugarpercent, winpercent)
+## # A tibble: 1 x 3
+##   competitorname sugarpercent winpercent
+##   <chr>                 <dbl>      <dbl>
+## 1 100 Grand             0.732       67.0
+```
+
+```{r}
+# Check out the observed winpercent for each candy
+candy$winpercent
+
+# Check out the predictions (fitted) & residuals 
+model_1$fitted
+model_1$residual
+```
+
+```{r}
+# Store the predictions, residuals, & true winpercent
+model_1_output <- data.frame(name = candy$competitorname,
+    observed  = candy$winpercent,
+    predicted = model_1$fitted,
+    residual  = model_1$residual)    
+
+# Check it out
+head(model_1_output, 3)
+##           name observed predicted  residual
+## 1    100 Grand 66.97173  53.33771  13.63402
+## 2 3 Musketeers 67.60294  51.81145  15.79148
+## 3     One dime 32.26109  44.74060 -12.47952
+```
+
+```{r}
+# Plot of residuals versus the predictions    
+ggplot(model_1_output, aes(y = residual, x = predicted)) + 
+    geom_point() + 
+    geom_hline(yintercept = 0)
+```
+
+It looks to be homoskedastic because the residuals seem to be roughly scattered around 0.
+
+```{r}
+# Q-Q plot of residuals
+ggplot(model_1_output, aes(sample = residual)) + 
+    geom_qq()
+```
+
+The residuals appear to be normal because the theoretical residual roughly matches the actual value from the sample.
+
+So from all of these analyses we can say that the principles of trend, homoskedasticity and normality hold. The homoskedasticity and normality are well held, but the trend, while it holds, seems to be a weak overall trend.
+
+In conclusion, I think that we could use model_1 to explain the relationship between winpercentage and sugarpercentage. However, this model does not appear to fit the data super well, and while all principles hold, making it useful model, it is not necessarily a good one since the relationship  between sugarpercentage and winpercentage does not appear to be a strong one. This leads to a lot of variability in the data, and thus larger residuals.
+
+# Model Evaluation, Strength and Prediction
+
+```{r}
+# Use mutate() to define chocolate variable as a factor, not a number    
+candy <- candy %>% 
+    mutate(chocolate = as.factor(chocolate))
+```
+
+```{r}
+# Model of winpercent by sugarpercent
+model_1 <- lm(winpercent ~ sugarpercent, candy)
+ggplot(candy, aes(x = sugarpercent, y = winpercent)) + 
+    geom_point() + 
+    geom_smooth(method = "lm")
+
+
+# Model of winpercent by sugarpercent & chocolate (with an interaction!)
+model_2 <- lm(winpercent ~ sugarpercent * chocolate, candy)
+ggplot(candy, aes(x = sugarpercent, y = winpercent, color = chocolate)) + 
+    geom_point() + 
+    geom_smooth(method = "lm")
+```
+
+At first glance modeling by sugarpercent and chocolate appears to be better.
+
+```{r}
+model_1_output <- data.frame(name = candy$competitorname, 
+                             observed = candy$winpercent,
+                             predicted = model_1$fitted, 
+                             residual = model_1$residual)    
+
+# Check it out
+head(model_1_output, 3)
+##           name observed predicted  residual
+## 1    100 Grand 66.97173  53.33771  13.63402
+## 2 3 Musketeers 67.60294  51.81145  15.79148
+## 3     One dime 32.26109  44.74060 -12.47952
+```
+
+```{r}
+model_2_output <- data.frame(name = candy$competitorname, 
+                             observed = candy$winpercent,
+                             predicted = model_2$fitted, 
+                             residual = model_2$residual)    
+
+# Check it out
+head(model_2_output, 3)
+##           name observed predicted  residual
+## 1    100 Grand 66.97173  53.33771  2.572738
+## 2 3 Musketeers 67.60294  51.81145  5.227198
+## 3     One dime 32.26109  44.74060 -7.573962
+```
+
+Model 2 has the better prediction for the 100 Grand Candy, by a lot (2.57 as opposed to 13.63).
+
+Note mean of residuals is always 0 within rounding error due to how the model is defined, so we need to use residual squared values.
+
+```{r}
+mean(model_1_output$residual)
+## [1] 7.755336e-16
+```
+
+The RSS (Residual sum of squares) here:
+```{r}
+#RSS for m1
+rss1 = sum(model_1$residuals^2)
+rss1
+#RSS for m2
+rss2 = sum(model_2$residuals^2)
+rss2
+```
+
+The mean squared prediction error (MSPE), MSPE = RSS/n:
+```{r}
+n = nrow(candy)
+#MSPE for m1
+sum(model_1$residuals^2)/n
+mspe1 = rss1/n
+#MSPE for m2
+sum(model_2$residuals^2)/n
+mspe2 = rss2/n
+```
+
+From both the RSS and the MSPE the second model appears to be the better model.
+
+The TSS for model_1 and model_2
+```{r}
+# Calculate R^2 for model_1 both from scratch & from the lm summary
+tss1 = sum((model_1_output$observed - mean(model_1_output$observed))^2)
+tss1
+
+# Calculate R^2 for model_2 both from scratch & from the lm summary
+tss2 = sum((model_2_output$observed - mean(model_2_output$observed))^2)
+tss2
+```
+
+So then to calculate the $R^2$ value:
+
+```{r}
+rsqrd1 = 1 - rss1/tss1
+rsqrd1
+rsqrd2 = 1 - rss2/tss2
+rsqrd2
+
+# Way to get R^2 value from the model
+#summary(model_1)
+#summary(model_2)
+```
+
+Model 2 has a better $R^2$ value, with model 2 being 0.44 and model one being 0.05, indicating that model 2 is a much better predictor for this data.
+
+In gereneral, RSS, MSPE (decrease) and $R^2$ (increases) improve as we add more predictors to the model (this is not always true though). 
+
+Take home messages of this activity is to do math to see model goodness. Also residuals are really important as they tell us all of these factors.
+
+# Experiment
+
+```{r}
+group_data <- read.csv("https://www.macalester.edu/~ajohns24/data//bodyfat174.csv")
+head(group_data)
+```
+
+```{r}
+group_data <- group_data %>%
+  select(-fatBrozek, -density, -fatFreeWeight)
+```
+
+```{r}
+cor(group_data)
+```
+
+
+```{r}
+# Use model to make predictions for each case in YOUR data
+predict_1 <- -934.945 + 1.0523 * group_data$abdomen -26.334*group_data$adiposity -0.5377*group_data$weight + 13.252*group_data$height +50.2138*group_data$neck + 8.7808*group_data$chest + 19.778*group_data$hip +0.3535*group_data$thigh + 0.6131*group_data$knee - 0.9615*group_data$ankle +0.249*group_data$biceps+0.253*group_data$forearm -50.966*group_data$hipin -74.67*group_data$wrist +0.0159*(group_data$abdomen*group_data$adiposity) - 0.71075*(group_data$height*group_data$neck) -0.124*(group_data$height*group_data$chest) +1.034*(group_data$height * group_data$wrist) + 0.372 * (group_data$adiposity*group_data$height)
+
+# Calculate residuals for these predictions
+resid_1 <- group_data$fatSiri - predict_1
+
+# Calculate MSPE
+mean(resid_1^2)
+```
+
+```{r}
+# Use model to make predictions for each case in YOUR data
+predict_1 <- 0.76656*group_data$abdomen - 51.61474
+
+# Calculate residuals for these predictions
+resid_1 <- group_data$fatSiri - predict_1
+
+# Calculate MSPE
+mean(resid_1^2)
+```
+
+```{r}
+# Use model to make predictions for each case in YOUR data
+predict_1 <-  -20.76140 + 0.92081*group_data$abdomen - 0.31914*group_data$height - 0.12347*group_data$weight
+
+# Calculate residuals for these predictions
+resid_1 <- group_data$fatSiri - predict_1
+
+# Calculate MSPE
+mean(resid_1^2)
+```

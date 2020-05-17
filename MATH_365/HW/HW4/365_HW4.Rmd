@@ -1,0 +1,639 @@
+# Math 365 / Comp 365: Homework 4
+
+### *Please bring a stapled hard copy of your answers to class*
+
+### Lawson Busch
+
+Collaborated with Raven Mcknight
+
+#### *Note: Problems 2 through 5 on this homework were all taken from the take-home portions of old midterm exams.*
+
+```{r,message=FALSE}
+require(Matrix)
+require(jpeg)
+set.seed(365)
+```
+
+Feel free to use my implementation of `vnorm` and `jacobi`:
+
+```{r}
+# Vector norm
+vnorm = function(v,p=2) { 
+  if ( p =="I") {
+    return(max(abs(v)))
+  }
+  else {
+    return(sum(abs(v)^p)^(1/p))
+  }
+}
+```
+```{r}
+# Solves Ax = b iteratively using the Jacobi Method
+# m is the maximum number of iterations: default m = 25
+# p is the p value of the matrix norm
+# tol is the stopping tolerance (using the relative residual norm on the backward error)
+jacobi = function(A,b,m=25,x = rep(0,n),p=2,tol=0.5*10^(-6),history=FALSE) {
+  n = length(b)
+  if (history) {
+    hist = matrix(NA,nrow=length(b),ncol=(m+1))
+    hist[,1] = x
+  }
+  d = diag(A)
+  R = A
+  R[cbind((1:n),(1:n))] = 0  # allows for r to be sparse  
+  steps=0
+  for (j in 1:m) {
+    x = (b - R %*% x)/d 
+    steps = steps+1
+    if (history) {hist[,(j+1)] = as.matrix(x)}
+    if (vnorm(b-A%*%x,p) <= vnorm(b,p)*tol) break 
+  }
+  if (history) return(list(x=x,iterations=steps,history = hist[,1:(steps+1)]))
+  else return(list(x=x,steps=steps))
+}
+```
+
+### Problem 1
+
+a) Find (by hand but then check your work in R) the Cholesky factorization $A=R^T R$ of the matrix
+$$ A=\begin{pmatrix}4 & -2 & 0 \\
+-2 & 2 & -3 \\
+0 & -3 & 10 
+\end{pmatrix}. $$
+
+After one step: 
+
+$$ A=\begin{pmatrix}4 & -2 & 0 \\
+-2 & 2 & -3 \\
+0 & -3 & 10 
+\end{pmatrix} = 
+\begin{pmatrix}2 & 0 & 0 \\
+-1 & 1 & 0 \\
+0 & 0 & 1 
+\end{pmatrix} *
+\begin{pmatrix}1 & 0 & 0 \\
+0 & 1 & -3 \\
+0 & -3 & 10 
+\end{pmatrix} * 
+\begin{pmatrix}2 & -1 & 0 \\
+0 & 1 & 0 \\
+0 & 0 & 1 
+\end{pmatrix}$$
+
+After the second step:
+
+$$ A1=\begin{pmatrix}1 & 0 & 0 \\
+0 & 1 & -3 \\
+0 & -3 & 10 
+\end{pmatrix} = 
+\begin{pmatrix}1 & 0 & 0 \\
+0 & 1 & 0 \\
+0 & -3 & 1 
+\end{pmatrix} *
+\begin{pmatrix}1 & 0 & 0 \\
+0 & 1 & 0 \\
+0 & 0 & 1 
+\end{pmatrix} * 
+\begin{pmatrix}1 & 0 & 0 \\
+0 & 1 & -3 \\
+0 & 0 & 1 
+\end{pmatrix}$$
+
+Which implies:
+
+$$ A =
+\begin{pmatrix}2 & 0 & 0 \\
+-1 & 1 & 0 \\
+0 & 0 & 1 
+\end{pmatrix} *
+\begin{pmatrix}1 & 0 & 0 \\
+0 & 1 & 0 \\
+0 & -3 & 1 
+\end{pmatrix} *
+\begin{pmatrix}1 & 0 & 0 \\
+0 & 1 & -3 \\
+0 & 0 & 1 
+\end{pmatrix} * 
+\begin{pmatrix}2 & -1 & 0 \\
+0 & 1 & 0 \\
+0 & 0 & 1 
+\end{pmatrix}$$
+
+Or that:
+
+$$ A=
+\begin{pmatrix}2 & 0 & 0 \\
+-1 & 1 & 0 \\
+0 & -3 & 1 
+\end{pmatrix} * 
+\begin{pmatrix}2 & -1 & 0 \\
+0 & 1 & -3 \\
+0 & 0 & 1 
+\end{pmatrix}$$
+
+Where:
+
+$$R^T = \begin{pmatrix}2 & 0 & 0 \\
+-1 & 1 & 0 \\
+0 & -3 & 1 
+\end{pmatrix}, R = \begin{pmatrix}2 & -1 & 0 \\
+0 & 1 & -3 \\
+0 & 0 & 1 
+\end{pmatrix}$$
+
+```{r}
+A = rbind(c(4, -2, 0), c(-2, 2, -3), c(0, -3, 10))
+chol(A)
+```
+
+We can see that my by hand calculation is correct because it matches the factorization returned by $chol(A)$ in R.
+
+b) Show that the Cholesky factorization procedure fails for the matrix 
+$$ B=\begin{pmatrix}4 & 2 & 0 \\
+2 & 1 & 3 \\
+0 & 3 & 4 
+\end{pmatrix}. $$
+
+We can see that the cholesky factorization will fail for the matrix $B$ when we attempt to factorize $B$.
+
+After one step:
+
+$$
+B=\begin{pmatrix}4 & 2 & 0 \\
+2 & 1 & 3 \\
+0 & 3 & 4 
+\end{pmatrix} = 
+\begin{pmatrix}2 & 0 & 0 \\
+1 & 1 & 0 \\
+0 & 0 & 1 
+\end{pmatrix} * 
+\begin{pmatrix}1 & 0 & 0 \\
+0 & 0 & 3 \\
+0 & 3 & 4 
+\end{pmatrix} * 
+\begin{pmatrix}2 & 1 & 0 \\
+0 & 1 & 0 \\
+0 & 0 & 1 
+\end{pmatrix}
+$$
+
+After one step we can see that $B$ will have a 0 pivot column (2, 2) which prevents the Cholesky factorization from working, as the Cholesky factorization must have all positive values for any $A_{ii}$. $B_{22}$ not being positive implies that $B$ is not symmetric positive definite, and thus that the Cholesky factorization will fail, as the Cholesky Factorization will only work on symmetric positive definite matricies.
+
+```{r}
+B = rbind(c(4, 2, 0), c(2, 1, 3), c(0, 3, 4))
+```
+
+c) Why does the Cholesky factorization work for the symmetric matrix $A$, but not for the symmetric matrix $B$? Hint: `eigen` may be useful.
+
+```{r}
+eigen(B)
+eigen(A)
+```
+
+The Cholesky Factorization works for the symmetric matrix $A$ because A is a symmetric positive definite matrix (all of its eigenvalues are positive). The Cholesky Factorization does not work for the symmetric matrix $B$ because B is not a symmetric positive definite matrix (not all of its eigenvalues are positive).
+
+### Problem 2
+
+Tridiagonal matrices show up a lot in applications.  These are matrices whose only nonzero entries are on the main diagonal and just above or just below the main diagonal.  
+
+a) Write a function `TriDiag(d,a,b)` which takes three vectors as input and puts them on the 3 diagonals.  For example, if you call 
+```
+TriDiag( c(5,3,5,4,4), c(1,2,3,4), c(11,12,13,14) ) 
+```
+you should get the matrix:
+```{r,echo=FALSE}
+print(rbind(c(5,11,0,0,0),c(1,3,12,0,0),c(0,2,5,13,0),c(0,0,3,4,14),c(0,0,0,4,4)))
+```
+
+Try to use as few `for` loops as possible (you can actually do it without any `for` loops). 
+
+Bonus: Build in an option to output a sparse matrix (in which case the `Matrix` package is required). In practice, you would almost always be using sparse matrices when dealing with large, tridiaganal matrices.
+
+```{r}
+TriDiag = function(d, a, b, sparse=FALSE) {
+  n = length(d)
+  if(!sparse) {
+    A = diag(n)
+    A = A*d
+    for(i in 2:n) {
+      A[i, i-1] = a[i-1]
+      A[i-1, i] = b[i-1]
+    }
+    return(A)
+  } else {
+    A = spMatrix(n, n, i=c(1:n, 2:n, 1:(n-1)), j=c(1:n, 1:(n-1), 2:n), x=c(d, a, b))
+    return(A)
+  }
+}
+TriDiag( c(5,3,5,4,4), c(1,2,3,4), c(11,12,13,14) ) 
+```
+
+
+b) Illustrate your function on the following command:
+```
+n = 10
+TriDiag(rep(5,n),rep(-1,n-1),rep(1,n-1))
+```
+
+```{r}
+n = 10
+TriDiag(rep(5,n),rep(-1,n-1),rep(1,n-1))
+```
+
+
+c) Use your `TriDiag` function and my implementation of Jacobi's method (above) to solve Computer Problem 2 in Section 2.5 of the book. Don't worry about finding the number of steps to reach a certain forward error. Instead, just try it with some different numbers of steps, and comment briefly on the convergence. Why might the convergence behave this way?
+
+```{r}
+n1=100
+b1 = rep(0, n)
+b1[1] = 1
+b1[n] = -1
+A1 = TriDiag(rep(2, n), rep(1, n-1), rep(1, n-1))
+res = jacobi(A1, b1, m=10000)
+```
+
+Looking at the matrix given in computer problem 2, we know that the jacobi method must converge because the matrix is diagonally dominant. However, the matrix takes a ton of steps to converge, and after 10000 only the first 15 or so elements are starting to converge. The convergence might behave this way because the matrix is not strickly diagonally dominant, but only diagonally dominant. This implies that the diagonal does not overpower the rest of the matrix, and might be what is causing the convergence to be so slow. 
+
+### Problem 3: Sparse LU Factorization
+
+Sparse matrices commonly appear when trying to solve partial differential equations by discretizing them. There are different methods to do this, but one of the most straightforward uses finite difference approximations for the partial differential operators, just as you used finite difference approximations for the derivative operator in Technical Report 1.
+
+For example, when doing a discrete approximation to a 2D heat diffusion problem, you end up with a sparse matrix with a block structure. Specifically, if the approximation grid contains $k_1$ by $k_2$ interior locations, you end up with a $(k_1\cdot k_2) \times (k_1\cdot k_2)$ matrix of the form
+$$A=\begin{bmatrix}
+B&-I& & & & \\
+-I&B& -I & & & \\
+& -I& \ddots & \ddots & &  \\
+& & \ddots & \ddots & \ddots &  \\
+& &  & \ddots & \ddots & -I  \\
+& &  & & -I & B  
+\end{bmatrix},$$
+where each $I$ is the $k_1 \times k_1$ identity matrix, and each $B$ is a $k_1 \times k_1$ matrix of the form
+$$B=\begin{bmatrix}
+4&-1& & & & \\
+-1&4& -1 & & & \\
+& -1& \ddots & \ddots & &  \\
+& & \ddots & \ddots & \ddots &  \\
+& &  & \ddots & \ddots & -1 \\
+& &  & & -1 & 4  
+\end{bmatrix}.$$ 
+
+Looking back at $A$, there are then $k_2$ copies of $B$ down the diagonal of $A$. For example, if $k_1=5$ and $k_2=3$, the sparsity pattern looks like this:
+
+
+Here is the actual matrix for that same case:
+
+As a final example, here is the actual matrix for the case of $k_1=8$ and $k_2=4$
+
+
+(a) Generate the matrix $A$ above for the case of $k_1=5$ and $k_2=3$.
+
+***Extra Credit***: Write a function `sparsePattern(k1,k2)` that takes any values of $k_1$ and $k_2$ and returns the matrix A. Check that it matches the examples above and try it on a couple of different matrices.
+
+```{r}
+sparsePattern = function(k1, k2){
+  k3 = k1*k2
+  A = spMatrix(k3, k3,  i=c(1:k3, 2:k3, 1:(k3-1), (k1+1):k3, 1:(k3-k1)), j=c(1:k3, 1:(k3-1), 2:k3, 1:(k3-k1), (k1+1):k3), x=c(rep(4, k3), rep(-1, k3-1),rep(-1, k3-1), rep(-1, k3-k1), rep(-1, k3-k1)))
+ return(A)
+}
+
+A = sparsePattern(5, 3)
+```
+
+
+
+One issue with using the LU decomposition on a sparse matrix like $A$ is that the factors $L$ and $U$ have more non-zero entries than $A$. This phenomenon is called *fill-in*. Here is an example you can try once you have formed $A$:
+
+```
+myLUFast = function(A,tol=10^-8) {
+  n = nrow(A)
+  L = diag(x=1,nrow=n)  # start with L = identity matrix
+  U=A
+  for ( k in 1:(n-1) ) {
+    pivot = U[k,k]
+    if (abs(pivot) < tol) stop('zero pivot encountered')
+    mults=U[(k+1):n,k]/pivot
+    U[(k+1):n,k]=0
+    U[(k+1):n,(k+1):n]=U[(k+1):n,(k+1):n]-mults%o%U[k,(k+1):n]
+    L[(k+1):n,k]=mults
+  }
+  return(list(L=L,U=U))
+}
+out=myLUFast(as.matrix(A))
+L=as(out$L,"sparseMatrix")
+U=as(out$U,"sparseMatrix")
+image(A)
+image(L)
+image(U)
+```
+
+Can we find triangular matrices $L$ and $U$ that are sparser and still satisfy $A=LU$? No, recall that the factorization is unique. Instead, one approach is to force $L$ and $U$ to be sparser, but have $LU$ only approximate $A$.
+
+b) Your main task is to write a function `mySparseLU` that returns a lower unit triangular matrix $L$ and an upper triangular matrix $U$ such that $L$ and $U$ only have off-diagonal non-zeros entries in the locations where $A$ has off-diagonal non-zero entries. In the following pseudocode for the algorithm, $NZ(A)$ is the set of indices of non-zero entries of $A$. For example, if $A_{3,4}\neq 0$, then $(3,4)\in NZ(A)$.
+
+```{r}
+mySparseLU = function(A) {
+ n = nrow(A)
+ for(i in 2:n) {
+   for(k in 1:(i-1)) {
+     if(A[i,k] != 0) {
+       A[i,k] = A[i,k]/A[k,k]
+       for(j in (k+1):n) {
+         if(A[i,j] != 0) {
+           A[i,j] = A[i,j] - A[i,k]*A[k,j]
+         }
+       }
+     }
+   }
+ }
+ L1 = lower.tri(A)
+ U1 = upper.tri(A, diag=TRUE)
+ L = L1*A + diag(n)
+ U = U1*A
+ return(list(L=L, U=U))
+}
+
+out=mySparseLU(A)
+image(out$L)
+image(out$U)
+
+approx=out$L%*%out$U
+approx.error=A-approx
+image(A)
+image(approx)
+image(approx.error)
+```
+
+As you can see from the resulting images, my mySparseLU function provides a good approximation of the matrix A when the resulting L and U are multiplied out, as the majority of the errores are extremely small or equal to 0. The resulting approximation image is also almost identical to the original A input except it stores some extra 0 indicies. 
+
+### Pseudocode for Sparse LU Approximate Factorization
+
+Input: $A$
+
+Output: $L$ (lower unit triangular) and $U$ (upper triangular)
+
+1. **for** $i=2,3,\ldots,n$ **do**
+2. $~~~$ **for** $k=1,2,\ldots,i-1$ and for $(i,k)\in NZ(A)$ **do**
+3. $~~~~~~~~~~~A_{ik}={A_{ik}}~/~{A_{kk}}$
+4. $~~~~~~~~~~~$**for** $j=k+1,\ldots,n$ and for $(i,j)\in NZ(A)$ **do**
+5. $~~~~~~~~~~~~~~~~~A_{ij}=A_{ij}-A_{ik}A_{kj}$
+6. $~~~~~~~~~~~$**end for** 
+7. $~~~$ **end for** 
+8. **end for**
+9. Let $U$ be the upper triangular part of $A$ (including the diagonal) 
+10. Let $L$ be the strictly lower triangular part of $A$ (not including the diagonal)
+11. Set every element of the diagonal of $L$ to be 1
+
+You may find the functions `upper.tri` and `lower.tri` useful. Your function `mySparseLU(A)` should return a list containing $L$ and $U$.
+
+To test your function, use your $A$ matrix from part (a), with $k_1=5$ and $k_2=3$, and double check that your $L$ and $U$ matrices have the same sparsity pattern as the lower and upper triangular parts of the original $A$, respectively:
+```
+out=mySparseLU(A)
+image(A)
+image(out$L)
+image(out$U)
+```
+
+While it is nice to preserve the sparsity pattern, we can also see that $A$ is only approximately equal to $LU$:
+```
+approx=out$L%*%out$U
+approx.error=A-approx
+image(A)
+image(approx)
+image(approx.error)
+```
+
+There is a tradeoff between how many additional non-zero entries we allow in $L$ and $U$ versus how accurately $LU$ approximates $A$. Generalizations of the algorithm you implemented manage that tradeoff, allowing the user some choice over how accurate of an approximation she requires for the application at hand.
+
+
+### Problem 4: Iterative methods for solving systems of linear equations
+
+*This problem is from Activity A11. There are FOUR parts to this problem!*
+
+We are interested in solving our favorite problem: $Ax=b$, where $b$ is a $1000 \times 1$ column vector with every entry equal to 1. Use the following commands to create and inspect your $A$ matrix (you should have created the function ThreeBanded in the A10 activity):
+```
+n=1000
+A=ThreeBanded(n,100)
+image(A)
+```
+
+The sparsity pattern of $A$ should look like this:
+
+
+We'll use two different iterative methods: Jacobi's method and the conjugate gradient method.
+
+a) Run 35 iterations of Jacobi's method, with an initial guess, $x^{(0)}$, of all zeros. From the sequence of approximations $\left\{x^{(k)}\right\}_{k=0,1,\ldots,35}$, compute the sequence of residuals $\left\{r^{(k)}\right\}_{k=0,1,\ldots,35}$ with $r^{(k)}=b-Ax^{(k)}$, and then compute the two-norms of the residual vectors. Save your residual norms in a vector called `jac.res.norms`, and plot the residual norms versus the iteration number using the following code:
+
+```{r}
+ThreeBanded=function(n,offset){
+  spMatrix(n,n,i=c(1:n,1:(n-1),2:n,(offset+1):n,1:(n-offset)),j=c(1:n,2:n,1:(n-1),1:(n-offset),(offset+1):n),x=c(.5+sqrt(1:n),rep(1,(2*(2*n-1-offset)))))
+}
+n=1000
+A=ThreeBanded(n,100)
+b = rep(1, n)
+
+r1 = jacobi(A, b, m=35, history=TRUE)
+xvec = r1$history
+#xvec[1:10, 1:10]
+dim(xvec)
+jac.res.norms = rep(0, 36)
+ri = 0
+for(i in 1:36){
+  ri = b-A%*%xvec[,i]
+  jac.res.norms[i] = vnorm(ri, p=2)
+}
+
+print(jac.res.norms)
+
+plot(0:35,jac.res.norms,pch=20,type="o",log="y",xlab="iteration (k)",ylab=expression("|| r"[k]~"||"[2]),col="blue",ylim=c(1e-2,1e2))
+grid()
+```
+
+
+```
+plot(0:35,jac.res.norms,pch=20,type="o",log="y",xlab="iteration (k)",ylab=expression("|| r"[k]~"||"[2]),col="blue",ylim=c(1e-2,1e2))
+grid()
+```
+
+Note: to compute the residuals, you will either have to modify the output of my `jacobi.r` code or compute the residuals after calling that function. Either is fine, but I recommend the latter method, as it will make the subsequent parts of this problem easier.
+
+b) The matrix $A$ is symmetric, positive definite, so we can also try conjugate gradient. Woohoo! Here is code for conjugate gradient:
+
+```{r}
+# Conjugate Gradient Method
+# Inputs: symm pos def matrix A, rhs b, number of steps n, 
+# x is the initial guess, 
+# tol is a stopping condition on the size of the residual
+# history gives a full history
+# Output: solution x to Ax=b 
+ConjGrad = function(A,b,x = rep(0,length(b)),tol=1e-18,m = length(b),history=FALSE) {
+  n = length(b)
+  r = b - A %*% x
+  d = r
+  if (history) {
+    hist = matrix(NA,nrow=n,ncol=m+1)
+    hist[,1] = x
+  }
+  for (i in 1:m ) {
+    if (max(abs(r)) < tol) break
+    steps = i
+    alpha = (t(r) %*% r)/(t(d) %*% A %*% d)  # step length
+    x = x + alpha[1,1] * d                  # take step 
+    if (history) {hist[,i+1] = x[,1]}
+    rold = r
+    r = rold - alpha[1,1] * A %*% d         # new residual
+    beta = (t(r) %*% r)/(t(rold) %*% rold)   # improvement this step
+    d = r + beta[1,1]*d
+  }
+  if (history) {return(list(x=x,history=hist))}
+  else {return(list(x=x,steps=steps))}
+}
+```
+
+Run 35 iterations of the conjugate gradient method on the same problem, with the same starting guess. Compute the sequence of residuals and the sequence of their norms (call the norms `cg.res.norms`). Make a new plot with your results from both Jacobi's method and conjugate gradient, using the following code:
+
+```{r}
+r2 = ConjGrad(A, b, m=35, history=TRUE)
+cxvec = r2$history
+dim(cxvec)
+cg.res.norms = rep(0, 36)
+ri2 = 0
+for(i in 1:36){
+  ri2 = b-A%*%cxvec[,i]
+  cg.res.norms[i] = vnorm(ri2)
+}
+
+print(cg.res.norms)
+
+plot(1:35,cg.res.norms[1:35],pch=20,type="o",log="y",xlab="iteration (k)",ylab=expression("|| r"[k]~"||"[2]),col="blue",ylim=c(1e-4,1e2))
+lines(0:35,cg.res.norms,pch=20,type="o",col="red")
+grid()
+```
+
+
+```
+plot(0:35,jac.res.norms,pch=20,type="o",log="y",xlab="iteration (k)",ylab=expression("|| r"[k]~"||"[2]),col="blue",ylim=c(1e-4,1e2))
+lines(0:35,cg.res.norms,pch=20,type="o",col="red")
+grid()
+```
+
+c) The condition number of $A$ using the 2-norm is around 173.4. Larger condition numbers like this can slow down the convergence of the conjugate gradient method. Here is a trick to speed it up. Let $M$ be a diagonal matrix with the $i^{th}$ diagonal element equal to the square root of the $i^{th}$ diagonal element of $A$, which in this case is $\sqrt{0.5+\sqrt{i}}$. Then instead of solving $Ax=b$, we can multiply on the left by $M^{-1}$ and solve:
+
+$$ M^{-1}Ax=[M^{-1}A M^{-1}]M x = M^{-1}b. $$
+
+How do we do solve this new problem? We let $\hat{A}=M^{-1}A M^{-1}$ and $\hat{b}=M^{-1}b$. Then we use the conjugate gradient method to solve $\hat{A}\hat{x}=\hat{b}$ (again with an initial guess of zeros) in order to get a sequence of approximations $\left\{\hat{x}^{(k)}\right\}_{k=0,1,\ldots,35}$. Finally, since $\hat{x}=Mx$, we need to compute $x^{(k)}=M^{-1}\hat{x}^{(k)}$ for every $k$ to get our sequence of approximations to the original problem. Do these computations, compute the residuals $b-A x^{(k)}$ (using the original $A$ and $b$, not $\hat{A}$ or $\hat{b}$), and then plot the norms of these residuals (which you should call `pcg.res.norms`) on a new plot with the results from parts (a) and (b), using the following code:
+
+```{r}
+M = diag(n)
+M = A*M
+M = sqrt(M) #Not calculated the same way as mentioned but does result in the correct M
+
+print(M[1:10, 1:10])
+Minv = solve(M)
+
+A1 = Minv*A*Minv
+b1 = Minv%*%b
+
+r3 = ConjGrad(A1, b1, m=35, history=TRUE)
+cxvec2 = r3$history
+pcg.res.norms = rep(0, 36)
+ri3 = 0
+for(i in 1:36){
+  newx = Minv%*%cxvec2[,i]
+  ri3 = b-A%*%newx
+  pcg.res.norms[i] = vnorm(ri3)
+}
+
+print(pcg.res.norms)
+
+plot(0:35,jac.res.norms,pch=20,type="o",log="y",xlab="iteration (k)",ylab=expression("|| r"[k]~"||"[2]),col="blue",ylim=c(1e-14,1e2))
+lines(0:35,cg.res.norms,pch=20,type="o",col="red")
+lines(0:35,pcg.res.norms,pch=20,type="o",col="green")
+grid()
+```
+
+
+```
+plot(0:35,jac.res.norms,pch=20,type="o",log="y",xlab="iteration (k)",ylab=expression("|| r"[k]~"||"[2]),col="blue",ylim=c(1e-14,1e2))
+lines(0:35,cg.res.norms,pch=20,type="o",col="red")
+lines(0:35,pcg.res.norms,pch=20,type="o",col="green")
+grid()
+```
+
+### Preconditioning 
+
+The technique used in part (c) is called ***preconditioning***. By now you should be convinced that it works quite well in some cases. Here are some more general discussion points about preconditioning:
+
+- A more formal worst case convergence analysis for conjugate gradient shows that the speed of convergence is tied to the condition number of the $A$ matrix (roughly proportional to the square root of the condition number)
+
+- Faster convergence can occur when the eigenvalues of $A$ are clustered (the reason for this had to do with polynomial approximation, which we'll learn about in the next section)
+
+- So one main idea of preconditioning is convert the orginal problem $Ax=b$ to a new problem $\hat{A}\hat{x}=\hat{b}$ where we can easily recover $x$ from $\hat{x}$ and where (i) the condition number of $\hat{A}$ is lower and/or (ii) the eigenvalues of $\hat{A}$ are clustered. We also need the preconditioner $M$ to be easily invertible (i.e., we don't usually explicitly construct the inverse of $M$)
+
+- Developing good preconditioners is a major area of research in computational linear algebra
+
+- *"It is generally accepted that for large-scale applications, CG should nearly always be used with a preconditioner."*  - Shewchuk technical report
+
+- The preconditioner you used in part (c) here is called the *Jacobi preconditioner* or *diagonal scaling*. It is one of the simplest preconditioners 
+
+d) How does the condition number of $\hat{A}$ in part (c) compare to that of $A$? Are the eigenvalues of $\hat{A}$ more clustered than those of $A$?
+
+```{r}
+Cond = function(A,p=2) {
+  if (p == 2) {  # by default use the 
+    s = svd(A)$d
+    s = s[s>0]
+    return(max(s)/min(s))
+  }
+  if (p == 1) {  # use the 1 norm
+    Ainv = solve(A)
+    return(max(colSums(abs(A)))*max(colSums(abs(Ainv))))
+  }
+  if (p == 'I') {   # use the infinity norm
+    Ainv = solve(A)
+    return(max(rowSums(abs(A)))*max(rowSums(abs(Ainv))))
+  }
+}
+
+Cond(A, p=2) #173.4488
+Cond(A1, p=2) #1
+
+eA = eigen(A)
+eA1 = eigen(A1)
+max(eA$values) - min(eA$values)
+max(eA1$values) - min(eA1$values)
+```
+
+The condition number of $\hat{A}$ is only $1$ while the condition number of $A$ is $173.4488$. Thus, by preconditioning we were able to lower the condition number of $A$ by a massive amount and speed up the convergence of the Conjugate gradient method. Further, we can see that the eigenvalues of $\hat{A}$ are significantly more clustered, as the furtherest values are only $5.551115*10^{-16}$ apart, while the eigenvalues in matrix A are not very clustered, as the furthest values are $34.32376$ apart.
+
+### Problem 5: Diagonal Dominance and Jacobi Convergence
+
+Perform a numerical experiment (or experiments) to test the following statement: *In general, the greater the diagonal dominance in a matrix, the faster the Jacobi method converges to the solution.* I am leaving it completely open ended as to how you do this. Be sure to explain your work and precisely how your numerical results support your conclusions.
+
+```{r}
+n = 10
+b = rep(1, n)
+A1 = TriDiag(rep(5,n),rep(-1,n-1),rep(1,n-1))
+r1 = jacobi(A1, b, m=35)
+r1$steps
+A2 = TriDiag(rep(10,n),rep(-1,n-1),rep(1,n-1))
+r2 = jacobi(A2, b, m=35)
+r2$steps
+A3 = TriDiag(rep(20,n),rep(-1,n-1),rep(1,n-1))
+r3 = jacobi(A3, b, m=35)
+r3$steps
+A4 = TriDiag(rep(40,n),rep(-1,n-1),rep(1,n-1))
+r4 = jacobi(A4, b, m=35)
+r4$steps
+A5 = TriDiag(rep(80,n),rep(-1,n-1),rep(1,n-1))
+r5 = jacobi(A5, b, m=35)
+r5$steps
+A6 = TriDiag(rep(160,n),rep(-1,n-1),rep(1,n-1))
+r6 = jacobi(A6, b, m=35)
+r6$steps
+```
+
+To test the statement *In general, the greater the diagonal dominance in a matrix, the faster the Jacobi method converges to the solution.*, I decided to use the TriDiag function that I wrote for problem 2. The use of this function gurantees that the resulting matrix will be a diagonally dominant matrix. Then, to increase the diagonal dominance I doubled the value on the diagonal for each matrix. I then ran the jacobi method on each matrix, and you can see that the number of steps needed until convergence generally decreases, although not always, when a matrix becomes more diagonally dominant. Thus, by increasing the diagonal dominance of the matrix, the number of steps needed until convergence generally decreases.
+
+### Problem 6: Reflection on Technical Report 1
+
+Please fill out the following [Technical Report Reflection Form ](https://drive.google.com/file/d/1xn2JykJPtHj_Xy1cg3NvNZ2FpB5MZtk3/view?usp=sharing), and attach it to your homework. I would like the reflection to be detachable from your homework assignment. 

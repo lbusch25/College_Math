@@ -1,0 +1,360 @@
+---
+title: "K-Means Clustering"
+author: "Lawson Busch"
+date: "11/29/2018"
+output: html_document
+---
+
+
+Goal is the same as hierarchical clustering - identify clusters or patterns in our data set.
+
+Goal is to get K-clusters that minimize within cluster variability (minimize within cluster differences). An instance can only be assigned to one cluster.
+
+```{r}
+library(ggplot2)
+library(dplyr)
+```
+
+
+# Excercises Part 1
+
+```{r}
+clust_plot <- function(clust = c(1,2,1,1,2)){
+    clust_dat <- data.frame(irises, clust)
+    centroids <- clust_dat %>% 
+        group_by(clust) %>% 
+        summarize(x=mean(Width), y=mean(Length))
+    clust_dat <- left_join(clust_dat, centroids)
+    ggplot(clust_dat, aes(x = Width, y = Length)) + 
+        geom_point() + 
+        geom_segment(aes(x = Width, xend = x, y = Length, yend = y)) + 
+        geom_point(aes(x = x, y = y), color = "red", size = 2) + 
+        geom_text(aes(label = c(1:5)), vjust = 1.5) + 
+        lims(x = c(0,4), y = c(0,4))
+}
+```
+
+
+```{r}
+irises <- data.frame(Width = c(0.5,0.5,2.3,2.8,3.0), 
+                     Length = c(2.0,2.5,1.3,1.8,1.3))
+ggplot(irises, aes(x = Width, y = Length)) + 
+    geom_point() + 
+    geom_text(aes(label = c(1:5)), vjust = 1.5) + 
+    lims(x = c(0,4), y = c(0,4))
+```
+
+## Step 1 - Initialization
+
+This randomly assigns the flowers. Goal is to get some idea, and then improve from there.
+
+```{r}
+set.seed(4)
+clust <- sample(c(1,2), size = 5, replace = TRUE)
+clust_flowers <- data.frame(irises, cluster = clust)
+clust_flowers
+```
+
+```{r}
+clust_plot(clust = c(2,1,1,1,2))
+```
+
+## Step 2 - Centroid Calculation
+
+The centroids are the mean values for each of our predictors. In this case Sepal Width and Sepal Length.
+
+```{r}
+clust_flowers %>% 
+    group_by(cluster) %>% 
+    summarize(mean(Width), mean(Length))
+```
+
+## Step 3 - Cluster Assignment
+
+```{r}
+# Store the cluster centroids
+centroids <- clust_flowers %>% 
+    group_by(cluster) %>% 
+    summarize(mean(Width), mean(Length)) %>% 
+    dplyr::select(-cluster)
+
+# Combine the flowers with the centroids
+irises_centroids <- rbind(as.matrix(irises), as.matrix(centroids))
+rownames(irises_centroids) <- c(1:5, "centroid 1", "centroid 2")
+
+# Calculate the distance of each flower from the 2 centroids
+dist(irises_centroids)
+```
+
+Redefine cluster so we can keep going.
+
+```{r}
+clust_plot(clust = c(2, 1, 2, 1, 1))
+clust_flowers <- data.frame(irises, cluster = c(2, 1, 2, 1, 1))
+```
+
+# Step 4 - Iterate until the clusters stabilize
+
+```{r}
+# Store the cluster centroids
+centroids <- clust_flowers %>% 
+    group_by(cluster) %>% 
+    summarize(mean(Width), mean(Length)) %>% 
+    dplyr::select(-cluster)
+
+# Combine the flowers with the centroids
+irises_centroids <- rbind(as.matrix(irises), as.matrix(centroids))
+rownames(irises_centroids) <- c(1:5, "centroid 1", "centroid 2")
+
+# Calculate the distance of each flower from the 2 centroids
+dist(irises_centroids)
+```
+
+Now to assign clusters:
+
+```{r}
+clust_plot(clust = c(2, 2, 1, 1, 1))
+clust_flowers <- data.frame(irises, cluster = c(2, 2, 1, 1, 1))
+```
+
+And the clusters have stabilized!
+
+## Check work in R
+
+```{r}
+k2 <- kmeans(irises, centers = 2)
+
+# Check out the cluster assigments
+k2$cluster
+
+# Plot the clusters
+irises <- irises %>% 
+    mutate(cluster = k2$cluster)
+ggplot(irises, aes(y = Length, x = Width, color = as.factor(cluster))) + 
+    geom_point() + 
+    lims(x = c(0,4), y = c(0,4))
+```
+
+Ehhhh it works.
+
+# Excercises Part 2 - Choosing K
+
+## 6 - Impact of K
+
+```{r}
+data(iris)
+```
+
+### 6a)
+
+```{r}
+# Take only Sepal.Length & Sepal.Width
+iris_sub <- iris %>%
+    dplyr::select(Sepal.Length, Sepal.Width)
+
+# K=2 clusters
+k_2 <- kmeans(iris_sub, centers = 2)
+ggplot(iris_sub, aes(x = Sepal.Width, y = Sepal.Length, color = as.factor(k_2$cluster))) + 
+    geom_point()
+
+k_3 <- kmeans(iris_sub, centers = 3)
+ggplot(iris_sub, aes(x = Sepal.Width, y = Sepal.Length, color = as.factor(k_3$cluster))) + 
+    geom_point()
+
+k_20 <- kmeans(iris_sub, centers = 20)
+ggplot(iris_sub, aes(x = Sepal.Width, y = Sepal.Length, color = as.factor(k_20$cluster))) + 
+    geom_point()
+```
+
+### 6b)
+
+The question of choosing K is a goldilocks problem because if K is too small, we won't be able to see all of our true clusters and separation in our data. This makes it appear like there are less clusters than are actually present. If K is too big, we break down into many small clusters, when there really arn't that many clusters present. Thus, to get an accurate picture K needs to be juuuuuuuuust right, making this a Goldilocks problem.
+
+## 7 - Choosin K
+
+To choose the correct K, we compare the total squared distance of each specimen from its assigned centroid (the total within- cluster sum of squares).
+
+For example K_2:
+```{r}
+k_2$tot.withinss
+```
+
+### 7a)
+
+```{r}
+k_sq_50 <- rep(0, 50)
+
+for(i in 1:50) {
+  k_i = kmeans(iris_sub, centers = i)
+  k_sq_50[i] = k_i$tot.withinss
+}
+
+plot(1:50, k_sq_50)
+```
+
+### 7b)
+
+From the above plot, any K from 3-5 seem reasonable. 
+
+### 7c)
+
+```{r}
+# Turn state variable into row names
+iris_cluster <- hclust(dist(scale(iris_sub)))
+plot(iris_cluster, cex = 0.8)
+```
+
+From the above, we can see that there appears to be three natural clusters.
+
+# Excercise Part 3 - Application
+
+```{r}
+bb <- read.csv("https://www.macalester.edu/~ajohns24/data/BaseballSalary.csv")
+ggplot(bb, aes(x = HR, y = BA)) + 
+    geom_point()
+```
+
+
+## 8 - Distance
+
+### 8a)
+
+Distance between Carney Lansford and Scott Cooper.
+
+```{r}
+bb[c(303,179), ] %>% 
+    dplyr::select(Player, BA, HR)
+##                Player   BA HR
+## 303 Carney Lansford   0.06  0
+## 179 Scott Cooper      0.46  0
+```
+
+Andy Van Slyke and Jay Bell
+
+```{r}
+bb[c(53,57), ] %>% 
+    dplyr::select(Player, BA, HR)
+##               Player   BA HR
+## 53 Andy Van Slyke    0.27 17
+## 57 Jay Bell          0.27 16
+```
+
+### 8b)
+
+```{r}
+ggplot(bb, aes(x = HR, y = BA)) + 
+    geom_point() + 
+    geom_point(data = bb[c(303,179), ], color = "green") + 
+    geom_point(data = bb[c(53,57), ], color = "red")
+```
+
+We need to be more thoughtful in defining distance because batting average is on a scale of 0-1 and HRs operates on a scale of whole numbers, thus causing difference between HRs to have a far larger impact than distance in BA.
+
+## 9 Standardizing Variables
+
+We can use the scale function to standardize variables:
+
+```{r}
+bb_sub <- bb %>% 
+    dplyr::select(BA, HR)
+scaled_bb <- data.frame(Player = bb$Player, scale(bb_sub))
+head(scaled_bb)
+##              Player          BA         HR
+## 1 Andre Dawson       0.29169657  2.3576137
+## 2 Steve Buchele      0.29169657  0.9582497
+## 3 Kal Daniels       -0.21241494  0.8506063
+## 4 Shawon Dunston     0.03964082  0.3123894
+## 5 Mark Grace         0.29169657 -0.1181841
+## 6 Ryne Sandberg      0.79580809  1.8193968
+```
+
+Plot of standardized variable:
+
+```{r}
+ggplot(scaled_bb, aes(x = HR, y = BA)) + 
+    geom_point()
+```
+
+The scales have been changed!
+
+### 9a)
+
+Van Slyke standarized z score:
+
+```{r}
+#BA
+(bb[53,]$BA - mean(bb$BA))/sd(bb$BA)
+```
+
+```{r}
+#HR
+(bb[53,]$HR - mean(bb$HR))/sd(bb$HR)
+```
+
+
+### 9b)
+```{r}
+scaled_bb[c(303,179), ]
+scaled_bb[c(53,57), ]
+```
+
+### 9c)
+
+According to the standardized distances, Carney Lansford and Scott Cooper are more similar players than Andy Van Slyke and Jay Bell.
+
+```{r}
+ggplot(scaled_bb, aes(x = HR, y = BA)) + 
+    geom_point() + 
+    geom_point(data = scaled_bb[c(303,179), ], color = "green") + 
+    geom_point(data = scaled_bb[c(53,57), ], color = "red")
+```
+
+This is supported on the plot above.
+
+## 10 - Clustering K Means
+
+### 10a)
+
+
+```{r}
+# K=2 clusters
+scaled_bb <- select(scaled_bb, -Player)
+k_2 <- kmeans(scaled_bb, centers = 2)
+ggplot(scaled_bb, aes(x = BA, y = HR, color = as.factor(k_2$cluster))) + 
+    geom_point()
+```
+
+### 10b)
+
+These two clusters are entirely split by homeruns. The first cluster contains all players with a scaled HR value < 0.75 and the second clust contains all players with a scaled HR value > 0.75. BA seems to have little to no affect on the clusters.
+
+
+## 11 Clustering: Hierarchical Clustering
+
+```{r}
+library(tree)
+hc <- hclust(dist(scaled_bb))
+plot(hc)
+```
+
+```{r}
+hcut <- cutree(hc, 2)
+ggplot(scaled_bb, aes(x = HR, y = BA, color = as.factor(hcut))) + 
+    geom_point()
+```
+
+Using the scaled data the Hierarchical clustering comes up with an entirely different cluster than the Kmeans clustering. The Kmeans clustering was clustered based on home runs, while the Hierarchical clustering is clustered based on batting average. Players with a BA < -2.5 are clustered together, and players with a BA > -2.5 are clustered together.
+
+## 12 - K Means VS Hierarchical
+
+### A)
+
+The Hierarchical clustering results in this funny pattern because it starts with the closest cluster and builds up from there. Thus, it tends to have a small branch and a large branch (that consists of a lot of sub branches) because it tends to build up branches from the bottom instead of evenly cluster.
+
+### B)
+
+Another drawback of hierarchical clustering is that its branches are not evenly sized, and thus when just looking for a small number of clusters it may group the data very unevenly compared to K means clustering.
+
+### C)
+
+One pro of Hierarchical clustering is that it very easily allowes us to see the distance values between two observations of data, compared to K means clustering (using the tree diagram).

@@ -1,0 +1,94 @@
+# Math 365 / Comp 365: Activity 2
+# Bisection Method
+
+### Question 1
+
+Implement an R function for the bisection method to find a root in a closed interval of a continuous function of one variable. See also the pseudocode in the slides S2.
+
+Here is an outline for your function:
+```
+bisect = function(f,interval,tol=0.5*10^-10,max.its=40){
+  history = rep(NA, max.its) 
+  
+  # Insert some code here
+  
+  return(list(root=root,history=history[!is.na(history)]))
+}
+```
+
+```{r}
+bisect = function(f,interval,tol=0.5*10^-10,max.its=40,verbose = FALSE){
+  history = rep(NA, max.its)  #Creates vector of NAs to allocate memory,
+  #Only returns the number of spaces filled when returned
+  a = interval[1]
+  b = interval[2]
+  count = 0
+  if(f(a)*f(b) > 0) {
+    stop("f(a)f(b)<0 not satisfied") #Returns and prints out this error message
+    #Similar to a try catch loop
+  }
+  while((b-a)/2 > tol){
+    count = count + 1
+    c = (a+b)/2
+    history[count] = c
+    if(verbose == TRUE) { #Essentially a debugging loop in R, can toggled with verbose input
+      print(count)
+      print(c(a,history[count],b,b-a))
+    }
+    if(f(c) == 0){
+      root = c
+      return (list(root=root,history=history[!is.na(history)], count = count))
+    } 
+    if(f(a)*f(c) < 0) {
+      b = c
+    } else {
+      a = c
+    }
+  }
+  root = c
+  return(list(root=root,history=history[!is.na(history)], count = count))
+}
+
+f=function(x){
+  return((cos(x))^2+sin(x)-1)
+}
+intV = c(2.5, 3.5)
+out=bisect(f,intV)
+print(out$root)
+print(out$history)
+print(out$count)
+```
+
+
+In the first line of the function definition, we set default values for the variables `tol` and `max.its`. That is, the user has the option to enter values for these variables when calling the function, but if they do not enter any values, then the values after the equals signs will be used instead. We stop the procedure when either (i)  the length of the bracket window is below the tolerance or (ii) the maximum number of iterations has been reached.
+
+The variable `history` will track all of the iterative estimates of the root. We initialize it in order to preallocate memory, which speeds up the program.
+
+We want the function to return two variables: the final estimate of the root and the history of all of the intermediate estimates. One way to do this in R is to return a list of variables. Note also that we can shorten the history vector to however many iterations we actually computed (instead of including all of those NAs).
+
+Don't forget to carefully comment your function!
+
+To use our function, we would define a function $f$ and an interval, and then call
+```
+out=bisect(f,interval)
+print(out$root)
+print(out$history)
+```
+Here, the dollar sign is a way to access each individual item in the list.
+
+
+### Question 2
+
+Test your function by running at most 40 iterations of the bisection method on the function $f(x)=x^4-\frac{1}{81}$, with a starting bracket interval of $[0,1]$ and a tolerance of 0.5*10^-10. Then compute the vector of error ratios
+$$ \left[\frac{e_1}{e_0},\frac{e_2}{e_1},\ldots\right] $$
+to confirm that the algorithm is converging linearly. Then, change the vector of error ratios to
+$$ \left[\frac{e_1}{(e_0)^2},\frac{e_2}{(e_1)^2},\ldots\right] $$ to see that the Bisection Method does not converge quadratically.
+
+```{r}
+
+```
+
+
+
+
+

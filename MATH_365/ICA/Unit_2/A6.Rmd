@@ -1,0 +1,128 @@
+
+## Math 365 / Comp 365: Activity 6
+## LU Factorization
+
+### Exercise 1: Write a function to perform LU decomposition
+
+code for VNorm:
+
+```{r}
+vnorm = function(x, p=2) {
+  if(p=='I') {
+    return(max(abs(x)))
+  } else {
+    return(sum(abs(x)^p)^1/p)
+  }
+}
+```
+
+
+a) Write a function `myLU(A)` that takes an $n \times n$ matrix $A$ and returns a lower triangular matrix $L$ and an upper triangular matrix $U$ such that $A=LU$. Recall, to return multiple variables from a function, you can create a list:
+```
+return(list(L=L,U=U))
+```
+You can check for 0 pivots, but if you find one, just stop the computations with the error command
+```
+stop('zero pivot encountered')
+```
+
+```{r}
+myLU = function(A) {
+  n = nrow(A)
+  U = A
+  L = diag(n)
+  for(k in 1:(n-1)) {
+    for(j in (k+1):n){
+      L[j,k] = U[j,k]/U[k,k]
+      U[j,k:n] = U[j,k:n]-L[j,k]*U[k,k:n]
+    }
+  }
+  return(list(L=L,U=U))
+}
+```
+
+
+b) Check your function on the example from today's class.
+
+```{r}
+mat1 = cbind(c(2,4,8,6), c(1,3,7,7), c(1,3,9,9), c(0,1,5,8))
+print(mat1)
+myLU(mat1)
+```
+
+
+c) What happens if you do an LU decomposition on a matrix that is already lower triangular or upper triangular?
+
+```{r}
+res1 = myLU(mat1)
+myLU(res1[[1]])
+myLU(res1[[2]])
+```
+
+You get the identity matrix as the other matrix and the input returned if you input a lower triangular or an upper triangular matrix (upper = upper an ident, lower = lower and ident).
+
+d) Start with some interesting lower triangular matrix $L$ and some interesting upper triangular matrix $U$. Multiply them together to get a matrix $A$, and then run your function on $A$ to see if you recover your original $L$ and $U$.
+
+```{r}
+L1 = cbind(c(1, 2, 3, 4), c(0, 1, 2, 3), c(0, 0, 1, 2), c(0, 0, 0, 1))
+U1 = cbind( c(4, 5, 2, 5), c(3, 4, 4, 2),c(2, 3, 5, 4), c(4, 3, 2, 1) )
+A = L1*U1
+print(A)
+
+myLU(A)
+
+```
+
+I did not get the same LU matricies back.
+
+### Exercise 2: An application in heat transfer
+
+*This problem is from Section 2.5, page 131 of Linear Algebra and Its Applications, by David Lay, the textbook many of you used for MATH 236.*
+
+![](heatflow.jpg)
+
+An important concern in the study of heat transfer is to determine the steady-state temperature distribution of a thin plate when the temperature around the boundary is known. Assume the plate shown in the figure above represents a cross section of a metal beam, with negligible heat flow in the direction perpendicular to the plate. Let the variables $x_1, x_2, \ldots, x_8$ denote the temperatures at nodes 1 through 8 in the picture. In steady state, the temperature at a node is approximately equal to the average of the four nearest nodes (to the left, above, right, below).
+
+a) The solution to the approximate steady-state heat flow problem for this plate can be written as a system of linear equations $Ax=b$, where $x=[x_1, x_2, \ldots, x_8]$ is the vector of temperatures at nodes 1 through 8. Find the $8 \times 8$ matrix $A$ and the vector $b$. Hint: $A$ should be a banded matrix with many zeros in the top right and bottom left parts of $A$.
+
+b) Use your function from Exercise 1 to perform an LU factorization of $A$. Do you notice anything special about the structures of $L$ and $U$?
+
+c) Once you have an LU factorization for a matrix $A$, you need to do the two-step procedure to complete the back substitution to solve $Ax=b$. Below is code for that. Make sure you understand what the code is doing, and then use it to find the steady-state temperatures at nodes 1 through 8.
+
+```{r}
+mySolve=function(L,U,b,tol=1e-10){
+
+  n=nrow(L)
+  
+  # First solve Ly=b 
+  y = rep(0,n)        # pre-allocate a vector y with 0s in it.
+  if(abs(L[1,1])<tol) stop('There is a zero on the diagonal of L')
+  y[1] = b[1]/L[1,1]  # Fill in the 1st value of y
+  for (j in 2:n ) {
+    if(abs(L[j,j])<tol) stop('There is a zero on the diagonal of L')
+    y[j] = (b[j] - L[j,1:(j-1)]%*%y[1:(j-1)])/L[j,j]
+  }
+
+  # Then solve Ux=y 
+  x = rep(0,n)        # pre-allocate a vector x with 0s in it.
+  if(abs(U[n,n])<tol) stop('There is a zero on the diagonal of U')
+  x[n] = y[n]/U[n,n]  # Fill in the nth value of x
+  for (j in (n-1):1 ) {
+    if(abs(U[j,j])<tol) stop('There is a zero on the diagonal of U')
+    x[j] = (y[j] - U[j,(j+1):n]%*%x[(j+1):n])/U[j,j]
+  }
+  return(x)
+}
+```
+
+
+
+d) The temperature on the right-hand side of the plate was measured incorrectly. It is actually 30 degrees. Find the new steady-state temperatures. Hint: you should not do another LU factorization! 
+
+e) Use the R function `solve(A)` to compute $A^{-1}$. Note that $A^{-1}$ is a **dense** matrix (without many zeros). When $A$ is large, $L$ and $U$ can be stored in much less space than $A^{-1}$. This fact is another reason for preferring the LU factorization of $A$ to $A^{-1}$ itself.
+
+### Exercise 3: Speeding up your code by eliminating a for loop
+
+a) How long does it take to run your function on a 1000 x 1000 matrix with random entries?
+
+b) Can you improve the speed of your code by eliminating the inner loop?  Also try not to perform unnecessary calculations where you know ahead of time the answer will be 0. How long does the same decomposition take now?

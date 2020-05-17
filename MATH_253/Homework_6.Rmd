@@ -1,0 +1,119 @@
+---
+title: "Homework 6"
+author: "Lawson Busch"
+date: "10/16/2018"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+
+# Part 1
+
+## Excercise 1
+
+The take away message from this talk is that almost all of our big data products employ algorithms that produce biased results, which could be biased against race, religion, location, or other factors, because their results and predictions are formed based on inherently biased data.
+
+One algorithm that was discussed that produced biased results was mapping or geotracking algorithms for various platforms, such as google maps or twitter location. These algorithms often work from opt in user data that is used as a training data set to predict future results (like location mapping or restaurant recommendations in your are). However, what happens with these algorithms is that they get a lot more opt in information from urban areas than rural areas, due to the difference in population. This leads to the maps or geographical data being highly detailed and accurate in urban areas, but less detailed and more innaccurate in rural areas, because it had less data to work with in its training data set. 
+
+The content in these talks relates to the methodological tools we have learned about in this course because it demonstrates how these tools can produce biased results. While we might have a statistically significant model, this model's predictions may be biased. This can happen if the data we use to fit the model has inherent bias, because the model will then make its predictions according to the inherent bias in its training data set.
+
+## Excercise 2
+
+Title: How We Analyzed the COMPAS Recidivism Algorithm
+Authors: Jeff Larson, Surya Mattu, Lauren Kirchner and Julia Angwin
+Venue: ProPublica
+Link: https://www.propublica.org/article/how-we-analyzed-the-compas-recidivism-algorithm
+
+The big take away messages from this article are that the COMPAS algorithm for predicting recidivism rates is twice as likely to incorrectly predict recidivism for black inmates as white inmates, and also twice as likely to incorrectly predict a low chance of recidivism for white inmates as black inmates. This demonstrates that even though the algorithm correctly predicted recidivism rates for both black and white inmates at the same rate, it has inherant bias against black inmates.
+
+The methodology for the COMPAS algorithm produced biased results because of the data that was used to train it. In the training data, black inmates recidivized at higher rates than white inmates, both violently and nonviolently. Thus, when forming a model to predict future cases, the model was more likely to predict black inmates as a higher risk to recidivise than white inmates, even when accounting for all other variables, because the data set it learned from indicated that this is the case. As a result, we see that the algorithm predicts whites and blacks recidivism correctly at the same rate (61%), but that black inmates are much more likely than white inmates to be incorrectly classified with a high risk of recidivism.
+
+# Part 2
+
+## Excercise 3
+
+```{r warning = FALSE, message = FALSE}
+library(AER)
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+data(HMDA)
+?HMDA
+```
+
+
+```{r}
+HMDA <- HMDA %>% 
+    select(deny, pirat, hirat, lvrat, chist, mhist,
+           phist, unemp, selfemp, hschool)
+```
+
+```{r}
+g1 <- ggplot(HMDA, aes(x=hschool, fill=deny)) +
+    geom_bar()
+g2 <- ggplot(HMDA, aes(x=hschool, fill=deny)) +
+    geom_bar(position="fill")
+grid.arrange(g1, g2, ncol=2)
+```
+
+### 3a)
+
+```{r}
+deny_by_hs <- glm(deny ~ hschool, HMDA, family="binomial")
+summary(deny_by_hs)
+```
+
+So our model on the log odds scale:
+$$log(odds of being denied) = -0.9343 -1.0864*hschoolyes$$
+
+And our model on the porbability scale is:
+$$probability(being denied) = \frac{e^{-0.9343 -1.0864*hschoolyes}}{e^{-0.9343 -1.0864*hschoolyes}+1}$$
+
+### 3b)
+
+To intepret this coefficient, we can convert it to the odds scale, where $odds = exp(-1.0864) = 0.3374291$. This implies that switching from not having a high school deploma to having a high school deploma decreases the odds of being denied a mortgage by a multiplicative factor of 0.3374291. Essentially, this means that the odds of someone without a high school deploma being denied are three times greater than the odds of someone with a high school deploma being denied.
+
+### 3c)
+
+To predict the probability that an applicant will be denied if they have a high school deploma:
+
+```{r}
+predict(deny_by_hs, newdata = data.frame(hschool = "yes"), type = "response")
+```
+
+From the above, we can see that the probability of an applicant being denied if they have a high school deploma is approximately 11.7%.
+
+And to predict the probability that an applicant will be denied if they do not have a high school deploma:
+
+```{r}
+predict(deny_by_hs, newdata = data.frame(hschool = "no"), type = "response")
+```
+
+From the above, we can see that the probability of an applicant being denied if they do not have a high school deploma is approximately 28.2%.
+
+## Excercise 4
+
+### 4a)
+
+To fit a model of deny controlling for all predictors:
+
+```{r}
+deny_by_all <- glm(deny ~ ., HMDA, family="binomial")
+summary(deny_by_all)
+```
+
+### 4b)
+
+When controlling for all other predictors, we can interpret the hschoolyes coefficient in a meaningful way by converting it to the odds scale, where $odds = exp(-0.78168) = 0.4576365$. This implies that switching from not having a high school deploma to having a high school deploma decreases the odds of being denied a mortgage by a multiplicative factor of 0.4576365, when controlling for all other predictors. Essentially, this means that the odds of someone without a high school deploma being denied are (roughly) two times greater than the odds of someone with a high school deploma being denied when controlling for all other predictors.
+
+### 4c)
+
+The coefficeint for highschoolyes is higher in the first model than in the second, and this results multiplicative factor for the odds of someone with no high school deploma getting denied increasing from .33 in the first model to .45 in the second. That is to say in the first people without a high school deploma are roughly three times as likely to be denied a mortgage when only looking at high school deploma as a predictor, but only twice as likely to be denied a mogage when accounting for all other predictors.
+
+### 4d)
+
+I think that the second model provides more evidence of educational discrimination in mortgage lending than the previous model. While the multiplicative factor for the odds of getting denied when solely changing from someone with no high school diploma to someone with a high school decreases from .33 in our first model to .45 in our second model, I still think that the second model provides more evidence. This is because the second model accounts for all other possible predictors, and still predicts that people without a high school diploma are roughly twice as likely to be denied a mortgage loan that those without a high school diploma.
+
+For the same reason, I also think that this model provides ample evidence of educational discrimination in mortgage lending. If we hold all other predictors constant, and only switch from an individual having a high school diploma to not one not having a high school diploma, we see that the individual without a high school diploma is roughly twice as likely to be denied a mortgage than the individual with a high school diploma. This is a significant difference, and one that occurs when all other factors are accounted for, giving a strong indication that education based discrimination is present in mortgage lending.

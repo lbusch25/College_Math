@@ -1,0 +1,273 @@
+---
+title: "Exam_1_Reference_Code"
+author: "Lawson Busch"
+date: "10/23/2018"
+output: html_document
+---
+
+# Data and model assumptions
+
+## dplyr stuff
+
+```{r}
+filter(google, freepress>60, request_rate > 2.0*10^(-5))
+```
+We can see that the outlier in this dataset is singapore.
+
+```{r}
+google_sub <- google %>%
+  filter(country != "singapore")
+```
+
+## Checking model assumptions 
+
+### Trend and Homoskedasticity
+```{r}
+nba_output <- data.frame(
+    predicted = nba_mod$fitted,
+    residual  = nba_mod$residual)
+```
+
+```{r}
+ggplot(nba_output, aes(y = residual, x = predicted)) + 
+    geom_point() + 
+    geom_hline(yintercept = 0)
+```
+
+From the above plot we can see that the assumption of homskedasticity holds, because the redisduals do not begin to diverge from 0 at any point, indicating that this model is homoskedastic. We can also see that the assumption of trend holds because the points are scattered evenly above and below 0.
+
+### Normality
+To check the assumption of normality we can create a q-q plot of the residuals:
+
+```{r}
+# Q-Q plot of residuals
+ggplot(nba_output, aes(sample = residual)) + 
+    geom_qq()
+```
+
+Because the QQ plot of the residuals is roughly a strait line, we can conclude that the assumption of normality holds.
+
+If exponentially growing QQ (aka residuals), we can plot the log(data) and it will likely fix the model (make the assumptions hold).
+
+## In sample/training data
+
+```{r}
+model_1_output <- data.frame(name = google_sub$country,
+    observed  = google_sub$request_rate,
+    predicted = model_1$fitted,
+    residual  = model_1$residual)
+
+rss1 = sum(model_1_output$residual^2)
+mspe1 = rss1/nrow(google_sub)
+tss1 = sum((model_1_output$observed - mean(model_1_output$observed))^2)
+r1sq = 1 - rss1/tss1
+```
+
+## Cross validation
+
+My loop to calculate LOOCV for my model:
+```{r}
+mspe_total = rep(0, 34)
+for(i in 1:34) {
+  train <- joy_2[-i,]
+  test <- joy_2[i,]
+  
+  model_train <- lm(track_popularity ~ track_number + energy + loudness + mode + liveness + valence, train)
+  model_test <- predict(model_train, newdata = data.frame(track_number = test$track_number, energy = test$energy,
+                                                          loudness = test$loudness, mode = test$mode, liveness = test$liveness,
+                                                          valence = test$valence))
+  
+  test_observed <- test$track_popularity
+  test_residuals <- test_observed - model_test
+  
+  mspe_test = mean(test_residuals^2)
+  mspe_total[i] = mspe_test
+}
+
+loocv = mean(mspe_total)
+loocv
+```
+
+And checking using the cv.glm function:
+```{r}
+library(boot)
+joy_model_glm <- glm(track_popularity ~ track_number + energy + loudness + mode + liveness + valence, joy_2, family = "gaussian")
+joy_model_cv <- cv.glm(joy_2, joy_model_glm)
+joy_model_cv$delta
+```
+
+And we can see that my loop produces the correct LOOCV. (The first delta value, second is adjusted for predictors.)
+
+# Model Building
+
+## Back step
+
+```{r}
+#Do backward stepwise selection for all 12 possible predictors
+back_step <- regsubsets(track_popularity ~ ., joy_2, method = "backward", nvmax = 12)
+# Store the summary information
+back_summary <- summary(back_step)
+back_summary
+```
+
+A plot of the adjusted $R^2$ values for the backward stepwise selection models.
+```{r}
+plot_data <- data.frame(size = 1:12, adjr2 = back_summary$adjr2)
+ggplot(plot_data, aes(x = size, y = adjr2)) + 
+    geom_point() + 
+    geom_line() + 
+    labs(x="subset size", y="Adjusted R-squared")
+```
+
+I would say that the optimal subset selection is with six predictor values, as that is both the last added predictor where we see a significant increase in adjusted $R^2$ value and is the last predictor before the drop off in adjusted $R^2$ value begins. While you could argue for a simpler model, I think the increase in adjusted $R^2$ is worth the additional predictors up until the sixth predictor.
+
+```{r}
+coef(back_step, 6)
+```
+
+## Best Subset
+
+```{r}
+# Perform best subsets
+best_subsets <- regsubsets(track_popularity ~ ., joy_2, nvmax = 12)
+
+# Store the summary information
+best_summary <- summary(best_subsets)
+best_summary
+```
+
+And a plot of our adjusted $R^2$ values for best subset selection:
+
+```{r}
+plot_data <- data.frame(size = 1:12, adjr2 = best_summary$adjr2)
+ggplot(plot_data, aes(x = size, y = adjr2)) + 
+    geom_point() + 
+    geom_line() + 
+    labs(x="subset size", y="Adjusted R-squared")
+```
+
+From the above plot, we can again see that the optimal subset size is 6 predictors, as it is the last significant increase in adjusted $R^2$ value, and we can see that after this increase, the adjusted $R^2$ values actually begin to drop off again.
+
+```{r}
+coef(best_subsets, 6)
+```
+
+## LASSO
+
+```{r}
+set.seed(2018)
+library(glmnet)
+
+joy_2 %>% na.omit(joy_2)
+
+# First process the data!  
+x <- model.matrix(track_popularity ~ ., joy_2)[,-1]
+y <- joy_2$track_popularity
+
+# Fit the LASSO for a grid of lambda
+lasso_mod <- glmnet(x, y, alpha = 1)
+
+# Plot a summary of these models
+plot(lasso_mod, xvar = "lambda", label = TRUE)
+```
+
+Looking at the above plot, if we used a $log \lambda = 1$, then we would have $3$ predictors remaining in the model.
+
+```{r}
+set.seed(2018)
+
+# Calculate the CV error rate for the LASSOs at each lambda
+lasso_cv <- cv.glmnet(x, y, alpha = 1)
+
+# Plot the CV results
+plot(lasso_cv)
+```
+
+In this plot we see the cv value dip initially as we begin to eliminate predictors with higher lambda values. At a certain point, as we continue to eliminate predictors, our model becomes less accurate (hence a higher cv value), but we remove more predictors, so the trade off is that the model is simpler. Another reason that the cv begins to increase is that as we increase the lambda value, our coefficients shrink further, allowing for more residual error.
+
+To get the actual coefficients and lambda value:
+
+```{r}
+lambda_best <- lasso_cv$lambda.min
+lambda_best
+log(lambda_best)
+```
+
+```{r}
+# Grab the coefficients for the LASSO using this lambda
+lasso_coef <- predict(lasso_mod, type = "coefficients", s = lambda_best)
+lasso_coef
+```
+
+# Nonparametric methods
+
+## Bootstrapping
+
+To generate the samples:
+
+```{r}
+set.seed(253)
+nba_resamples <- rep_sample_n(nfl_fandom_google, size = nrow(nfl_fandom_google), replace = TRUE, reps = 1000)
+```
+
+To generate 1000 models:
+
+```{r}
+nba_bootstrap_models <- nba_resamples %>%
+  group_by(replicate) %>%
+  do(lm(nba ~ trump_2016_vote, data = .) %>% tidy())
+```
+
+Plotting all 1000 models:
+```{r}
+ggplot(nba_resamples, aes(x = trump_2016_vote, y = nba, group = replicate)) + 
+    geom_smooth(method = "lm", se = FALSE)
+```
+
+To access the data for the slopes:
+
+```{r}
+nba_bootstrap_slopes <- nba_bootstrap_models %>%
+  filter(term == 'trump_2016_vote')
+head(nba_bootstrap_slopes)
+```
+
+To get the mean of the slopes:
+```{r}
+mean(nba_bootstrap_slopes$estimate)
+```
+
+We can see that this mean is close to the original least squares estimate of -0.1785.
+
+To get the standard deviation of the slopes:
+```{r}
+sd(nba_bootstrap_slopes$estimate)
+```
+
+```{r}
+quantile(nba_bootstrap_slopes$estimate, c(0.025, 0.975))
+```
+
+From the above, we can see that our 95% confindence interval for our 1000 bootstrap models falls between -0.2345971 and -0.1206482.
+
+To get the null slopes we can simply subtract the mean:
+```{r}
+slopes <- nba_bootstrap_slopes$estimate
+null_slopes <- slopes - mean(slopes)
+null_slopes <- as.data.frame(null_slopes)
+```
+
+And to plot the histogram:
+```{r}
+ggplot(null_slopes, aes(x=null_slopes)) + geom_histogram(color = 'white') + geom_vline(xintercept = -0.17853)
+```
+
+Since a p-value is the probability of seeing a more extreme value than our observed sample slope, we can calculate the p-value by summing the null slopes that are < our observed value, and then divide by the number of elements:
+```{r}
+null_slopes_diff <- null_slopes %>%
+  filter(null_slopes < -0.17853)
+abs(sum(null_slopes_diff$null_slopes)/nrow(null_slopes))
+```
+
+## KNN
+

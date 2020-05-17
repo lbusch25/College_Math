@@ -1,0 +1,441 @@
+---
+title: "Homework 5"
+author: "Lawson Busch"
+date: "10/9/2018"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+## Excercise 1
+
+```{r}
+library(nlme)
+library(dplyr)
+library(ggplot2)
+library(FNN)
+library(boot)
+library(infer)
+data(Glucose2)
+dim(Glucose2)
+?Glucose2
+```
+
+### 1a)
+
+To get the subject time count we can group by subject and summarize the number of times they were observed:
+
+```{r}
+subject_time <- Glucose2 %>%
+  group_by(Subject) %>%
+  summarize(times_observed = n())
+
+dim(subject_time)
+head(subject_time)
+```
+
+From this calculation, we can see that there were seven subjects that were observed at 28 points in time (14 times on two separate days).
+
+### 1b)
+
+To get the average glucose level at each time, we can group by time and get the mean glucose level: 
+
+```{r}
+alchohol <- Glucose2 %>%
+  group_by(Time) %>%
+  summarize(glucose = mean(glucose))
+
+head(alchohol)
+dim(alchohol)
+```
+
+### 1c)
+
+We can use the mutate function to redefine the time variable in alchohol in terms of hours:
+
+```{r}
+alcohol <- alchohol %>%
+  mutate(Time = (Time*10)/60)
+
+head(alcohol, 3)
+tail(alcohol, 3)
+```
+
+### 1d)
+
+```{r}
+max_glucose = max(alcohol$avg_glucose)
+filter(alcohol, glucose == max_glucose)
+```
+
+Post-alchohol ingestion glucose levels spike at one hour post consumption.
+
+## Excercise 2
+
+First to fit a KNN model of glucose over time, we first want to create a grid of 1000 time points:
+
+```{r}
+# Create a grid of 1000 time points
+time_seq <- seq(-1/6, 5, length = 1000) #From -1/6 to 5 equall distribute 1000 intervals
+head(time_seq)    
+tail(time_seq)
+```
+
+Next we fit a KNN regression model using our original data points, and use it to predict our sequential time data:
+
+```{r}
+# Load the FNN library for the knn.reg() function
+knn_2 <- knn.reg(train = alcohol$Time, test = data.frame(time_seq), y = alcohol$glucose, k = 2)
+
+# Store the 1000 KNN predictions and 1000 time points in knn_results 
+knn_results <- data.frame(time_seq, pred_2 = knn_2$pred)
+head(knn_results)
+```
+
+And to plot the model:
+
+```{r}
+ggplot(alcohol, aes(x = Time, y = glucose)) + 
+    geom_point() + 
+    geom_line(data = knn_results, aes(x = time_seq, y = pred_2), color = "red")
+```
+
+## Excercise 3
+
+### 3a)
+
+To create the KNN = 1 model and store the predictions:
+
+```{r}
+knn_1 <- knn.reg(train = alcohol$Time, test = data.frame(time_seq), y = alcohol$glucose, k = 1)
+
+# Store the 1000 KNN predictions and 1000 time points in knn_results 
+knn_results <- data.frame(time_seq, pred_1 = knn_1$pred)
+head(knn_results)
+```
+
+### 3b)
+
+To plot the KNN = 1 model predictions:
+
+```{r}
+ggplot(alcohol, aes(x = Time, y = glucose)) + 
+    geom_point() + 
+    geom_line(data = knn_results, aes(x = time_seq, y = pred_1), color = "red")
+```
+
+### 3c)
+
+The K=1 KNN model perfectly predicts each of our data points because for each data point, it is iteself its nearest neighbor. Thus, the average prediction for its neighborhood is its own glucose value, meaning it will be perfectly predicted by our model.
+
+### 3d)
+
+The steps in this mode are always halfway between the data points because that is where the nearest neighbor switches. In other words, that is when the next neighborhood is considered, and the next data point is the average for that neighborhood.
+
+## Excercise 4
+
+### 4a)
+
+To construct the model for KNN where K = 5:
+```{r}
+knn_5 <- knn.reg(train = alcohol$Time, test = data.frame(time_seq), y = alcohol$glucose, k = 5)
+
+# Store the 1000 KNN predictions and 1000 time points in knn_results 
+knn_results <- data.frame(time_seq, pred_5 = knn_5$pred)
+head(knn_results)
+```
+
+To plot this model:
+
+```{r}
+ggplot(alcohol, aes(x = Time, y = glucose)) + 
+    geom_point() + 
+    geom_line(data = knn_results, aes(x = time_seq, y = pred_5), color = "red")
+```
+
+This model is "smoother" than K = 1 or K = 2 because it uses the averages of the five nearest neighbors, meaning that there are less neighborhoods and thus less steps.
+
+### 4b)
+
+To construct the KNN model for K = 14:
+```{r}
+knn_14 <- knn.reg(train = alcohol$Time, test = data.frame(time_seq), y = alcohol$glucose, k = 14)
+
+# Store the 1000 KNN predictions and 1000 time points in knn_results 
+knn_results <- data.frame(time_seq, pred_14 = knn_14$pred)
+head(knn_results)
+```
+
+And to construct the plot:
+```{r}
+ggplot(alcohol, aes(x = Time, y = glucose)) + 
+    geom_point() + 
+    geom_line(data = knn_results, aes(x = time_seq, y = pred_14), color = "red")
+```
+
+This model exhibits the special shape of a strait line because for each time stamp it uses the average of all data points to make its prediction. Thus, every time stamp will have the exact same prediction, because it is the mean of all our sample data points.
+
+### 4c)
+
+Fitting a KNN model is a goldilocks challenge because you want a K that is just the right size. If K is too small, the model will be overfit, as it will be too closely related to each individual data point. If K is too large, we lose a lot of the information of the individual areas in our model, making the model less useful.
+
+## Excercise 5
+
+### Excercise 5 set up/practice
+
+```{r}
+# Set up training data
+train_data <- alcohol[-5, ]
+
+# Fit KNN using training data
+train_knn <- knn.reg(train = train_data$Time, test = data.frame(time_seq), y = train_data$glucose, k = 1)    
+knn_results$pred_loo <- train_knn$pred
+ggplot(alcohol, aes(x = Time, y = glucose)) + 
+    geom_point() + 
+    geom_line(data = knn_results, aes(x = time_seq, y = pred_loo), color = "red")
+```
+
+```{r}
+# Run knn.reg without a test set
+knn_cv <- knn.reg(train = alcohol$Time, y = alcohol$glucose, k = 1)    
+
+# Get PRESS = sum of squared prediction errors
+knn_cv$PRESS    
+
+# Average squared prediction error = PRESS/SAMPLE SIZE    
+knn_cv$PRESS / 14
+```
+
+### 5a)
+
+To construct the linear model of glucose by time:
+
+```{r}
+glucose_lm <- glm(glucose ~ Time, data = alchohol)
+```
+
+To calculate the LOOCV error:
+
+```{r}
+glucose_lmcv <- cv.glm(alchohol, glucose_lm, K = 14)
+glucose_lmcv$delta
+```
+
+From this we can see that the LOOCV error for the linear model of glucose by time is 1.257047.
+
+### 5b)
+
+To calculate the KNN LOOCV error for all models from K = 1 to K = 13:
+
+```{r}
+KNN_cv <- rep(0, 13)
+for(i in 1:13) {
+  knn_cv <- knn.reg(train = alcohol$Time, y = alcohol$glucose, k = i)
+  KNN_cv[i] <- knn_cv$PRESS / 14
+  #you had i here needs to be 14
+}
+```
+
+### 5c)
+
+```{r}
+plot_data <- data.frame(K = 1:13, Knn_cv = KNN_cv)
+ggplot(aes(x = K, y = Knn_cv), data = plot_data) + geom_line() + geom_point() + labs(x = "K", y = "KNN_cv") + geom_hline(yintercept = 1.257047)
+```
+
+### 5d)
+
+I would choose the KNN model with two neighbors, as its LOOCV is lower than the linear model's LOOCV. 
+
+## Excercise 6
+
+### 6a)
+
+```{r}
+ggplot(alcohol, aes(x = Time, y = glucose)) + 
+    geom_point() + 
+    geom_smooth(span = 0.3, se = FALSE)
+
+ggplot(alcohol, aes(x = Time, y = glucose)) + 
+    geom_point() + 
+    geom_smooth(span = 0.7, se = FALSE)
+
+ggplot(alcohol, aes(x = Time, y = glucose)) + 
+    geom_point() + 
+    geom_smooth(span = 1.0, se = FALSE)
+```
+
+### 6b)
+
+The LOESS model changes as the span increases. The span input has a similar affect to the K value in the KNN model, where increasing it seems to include a larger range of inputs to generate a "guess" at a specific point. Thus, as the span increases, the model less closely fits all of our data points.
+
+### 6c)
+
+LOESS isn't a strait line for span = 1 even though span = 1 uses all data points because the LOESS model takes a weighted average, not a strait average. This means that data points closer to our intial data point will have their values weighted as more important in the average, so we still see local trends even when all data points are included.
+
+## Excercise 7
+
+### 7a)
+
+With respect to the LOOCV error, the KNN model is worse than the linear regession model for all but a few K values, where it is about even. Thus, we can conclude that with respect to the LOOCV error the KNN is worse than the linear regression model.
+
+### 7b)
+
+From this example, I would say that a parametric model is better when we have a lot of data points and a general overall trend, especially if those data points have a good amount a variability between them. A nonparametric approach seems to be better when we have less data points, and less variability in a neighborhood of our data set.
+
+## Excercise 8
+
+```{r}
+library(ISLR)
+data(College)
+dim(College)
+## [1] 777  18
+?College
+```
+
+```{r}
+College_sub <- College %>% 
+    select(Outstate, Private, Room.Board, PhD, perc.alumni, Expend)
+
+library(GGally)
+ggpairs(College_sub)
+```
+
+### 8a)
+
+```{r}
+median_outstate <- median(College_sub$Outstate)
+median_outstate
+```
+
+From the above, we can see that the median out of state tuition is $9,990 in 1995 dollars.
+
+### 8b)
+
+To get the median tuition for private colleges:
+```{r}
+median_private <- median(filter(College_sub, Private == "Yes")$Outstate)
+median_private
+```
+
+We can see that the median out of state tuition for private colleges is $11,200 in 1995 dollars.
+
+```{r}
+median_non_private <- median(filter(College_sub, Private == "No")$Outstate)
+median_non_private
+```
+
+We can see that the median out of state tuition for non private colleges is $6,609 in 1995 dollars.
+
+### 8c)
+
+To take our 1000 resamples:
+
+```{r}
+set.seed(253)
+college_resamples <- rep_sample_n(College_sub, size = nrow(College_sub), replace = TRUE, reps = 1000)
+college_resamples_medians <- college_resamples %>%
+  group_by(replicate) %>%
+  summarize(median = median(Outstate))
+```
+
+And then to calculate our 95% confidence intervale:
+
+```{r}
+quantile(college_resamples_medians$median, c(0.025, 0.975))
+```
+
+From the above, we can see that our confidence interval (between 2.5% and 97.5%) lies between 9,592 and 10,430, in 1995 dollars. From this confidence interval, we can say that we are 95% confident that the true median for Oustate tuition (in 1995 dollars) falls between 9,592 and 10,430.
+
+## Excercise 9
+
+### 9a)
+
+```{r}
+college_lm <- lm(Outstate ~ ., data = College_sub)
+summary(college_lm)
+```
+
+From the summary table, we can see that being a private university, having a higher room and board, having a higher percentage of faculty with PHDs, more alumni who donate and more expenditure per student all indicate a higher Outstate value. That is to say, for all of our predictors, we would expect and increase in that predictor to also result in an increase in our Outstate value.
+
+### 9b)
+
+To prepare the data for our KNN models:
+
+```{r}
+# Set up the multiple predictors
+x <- model.matrix(Outstate ~ ., College_sub)[,-1]
+```
+
+And to calculate the LOOCV for our KNN models:
+```{r}
+KNN_cvs <- rep(1, 150)
+for(i in 1:150) {
+  knn_mod <- knn.reg(train = x, y = College_sub$Outstate, k = i)
+  KNN_cvs[i] <- knn_mod$PRESS / nrow(College_sub)
+  #You had this as i, it needs to be nrow(College_sub)
+}
+```
+
+### 9c)
+
+To plot our LOOCVs for our KNN models:
+
+```{r}
+plot_data <- data.frame(K = 1:150, Knn_cv = KNN_cvs)
+ggplot(aes(x = K, y = Knn_cv), data = plot_data) + geom_line() + geom_point() + labs(x = "K", y = "KNN_cv") + geom_hline(yintercept = 4353713)
+```
+
+### 9d)
+
+The curse of dimensionality is the fact that convergence of any estimator to the true value is very slow in high dimensional space. KNN particulary suffers from the curse of dimensionality because in higher dimensional spaces, euclidean distance is used to calculate nearness. As a result, there are often hubs of very near points in the K nearest neighbors calculation, which skew predicitons due to clusters of similar neighborhoods. As a result, we need a large K to begin approaching the true value, in order to account for the skew caused by clusters, and lower our LOOCV error, which is why it takes so long for the KNN method to converge towards the true value.
+
+## Excercise 10
+
+```{r}
+library(gam)
+gam_1 <- gam(Outstate ~ Private + lo(Room.Board,span=0.5) + lo(PhD,span=0.5) +
+            lo(perc.alumni,span=0.5) + lo(Expend,span=0.5), data=College_sub)
+
+plot(gam_1)
+```
+
+### 10a)
+
+To calculate the LOOCV for the gam model:
+
+```{r warning = FALSE, message = FALSE}
+mspe_total = rep(1, nrow(College_sub))
+for(i in 1:nrow(College_sub)) {
+  train <- College_sub[-i,]
+  test <- College_sub[i,]
+  
+  model_train <- gam(Outstate ~ Private + lo(Room.Board,span=0.5) + lo(PhD,span=0.5) +
+            lo(perc.alumni,span=0.5) + lo(Expend,span=0.5), data=train)
+  model_test <- predict(model_train, newdata = data.frame(Private = test$Private,
+                                                          Room.Board = test$Room.Board,
+                                                          PhD = test$PhD,
+                                                          perc.alumni = test$perc.alumni,
+                                                          Expend = test$Expend))
+  
+  test_observed <- test$Outstate
+  test_residuals <- test_observed - model_test
+  
+  mspe_test = mean(test_residuals^2)
+  mspe_total[i] = mspe_test
+}
+
+MSPEs <- data.frame(mspe_total)
+#ggplot(MSPEs, aes(x = mspe_total)) + 
+    #geom_histogram(color = "white")
+
+loocv = mean(mspe_total)
+loocv
+```
+
+From the above code we can see that the LOOCV for the gam model is approximately 3,742,646. This is significantly better than the LOOCV for our parametric regression model, which was 4,353,713.
+
+### 10b)
+
+One scenario in which we wouldn't care about the lack of coefficients is if we are mainly concernced with predicting the value of new data points. If that is our primary concern, then we would not care much about the coefficients of our model, and would be happy with the gam model due to its significantly lower LOOCV.

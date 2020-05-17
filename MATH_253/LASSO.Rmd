@@ -1,0 +1,252 @@
+---
+title: "LASSO"
+author: "Lawson Busch"
+date: "9/25/2018"
+output: html_document
+---
+
+Simulating a sample of model to use LASSO model fitting on.
+
+```{r}
+# Simulate a sample of data
+set.seed(2000)
+x <- rnorm(100)
+x <- (x - mean(x))/sd(x)
+y <- 2*x + rnorm(100)
+y <- (y - mean(y))/sd(y)
+
+# Fit the least squares model
+ls_model <- lm(y ~ x)
+coef(ls_model)
+##  (Intercept)            x 
+## 2.506628e-17 8.788850e-01
+```
+
+Writing a function to calculate the penalized_rss for the LASSO method.
+
+```{r}
+penalized_rss <- function(lambda, beta){
+    # Calculate the RSS
+    rss <- sum((y-beta*x)^2)
+
+    # Calculate the shrinkage penalty
+    penalty <- lambda * abs(beta)
+
+    # Combine the RSS and shrinkage penalty
+    rss + penalty
+}
+```
+
+```{r}
+penalized_rss(lambda=1, beta=1)
+## [1] 24.98076
+```
+
+Filling in a table using the penalized_rss:
+
+Note: lambda is the penalty associated to big coefficients.
+
+```{r}
+lVec = c(0, 10, 50, 110)
+betaVec = c(0.88, 0.75, 0, .25)
+
+#pVec = rep(0, 16)
+
+# for(i in 1:length(lVec)) {
+#   pVec[i*1] = penalized_rss(lVec[i], betaVec[1])
+#   pVec[i*2] = penalized_rss(lVec[i], betaVec[2])
+#   pVec[i*3] = penalized_rss(lVec[i], betaVec[3])
+#   pVec[i*4] = penalized_rss(lVec[i], betaVec[4])
+# }
+
+
+
+#pVec
+
+penalized_rss(0, 0.88)
+penalized_rss(10, 0.88)
+penalized_rss(50, 0.88)
+penalized_rss(110, 0.88)
+
+penalized_rss(0, 0.75)
+penalized_rss(10, 0.75)
+penalized_rss(50, 0.75)
+penalized_rss(110, 0.75)
+
+penalized_rss(0, 0)
+penalized_rss(10, 0)
+penalized_rss(50, 0)
+penalized_rss(110, 0)
+
+penalized_rss(0, 0.25)
+penalized_rss(10, 0.25)
+penalized_rss(50, 0.25)
+penalized_rss(110, 0.25)
+```
+
+                          $\lambda=0$   $\lambda=10$   $\lambda=50$   $\lambda=110$
+----------------------    -----------   ------------   ------------   --------------
+$\hat{\beta}_1 = 0.88$    22.52867      31.32867        66.52867      119.32867
+$\hat{\beta}_1 = 0.75$    24.17307      31.67307        61.67307      106.6731
+$\hat{\beta}_1 = 0$       99            99              99            99
+"chosen" $\hat{\beta}_1$  61.68269      64.18269        74.18269      89.18269
+
+# Lasso Practice
+
+```{r}
+# Load the data
+library(ISLR)
+data(Hitters)
+
+# Examine codebook
+?Hitters
+```
+
+Need to elimate null pointers for the lasso method:
+
+```{r}
+sum(is.na(Hitters$Salary))
+## [1] 59
+
+ # Omit any rows with missing data (THIS IS NECESSARY FOR LASSO)
+Hitters_sub <- na.omit(Hitters)
+```
+
+```{r}
+library(dplyr)
+
+# How many players are in the data set? 263
+
+dim(Hitters_sub)
+#Hitters <- rownames_to_comlumn(Hitters)
+
+# What are the top 6 salaries?
+
+Hitters_sal <- Hitters_sub %>%
+  arrange(desc(Salary))
+head(Hitters_sal)
+
+# How many possible predictors of player salary do we have? 19 (number of non salary predictors)
+```
+
+### 3
+
+```{r}
+ls_mod <- lm(Salary ~ ., Hitters_sub)
+summary(ls_mod)
+```
+
+```{r}
+library(boot)    
+model_1_glm <- glm(Salary ~ ., Hitters_sub, family="gaussian")
+
+set.seed(2000)
+model_1_cv  <- cv.glm(Hitters_sub, model_1_glm, K = 10)
+model_1_cv$delta
+```
+
+## Lasso shit
+
+```{r}
+# First process the data!  
+x <- model.matrix(Salary ~ ., Hitters_sub)[,-1]
+y <- Hitters_sub$Salary
+```
+
+X transforms categorical values into numerical ones, with a number representing each category.
+
+```{r}
+library(glmnet)
+
+# alpha = 1 specifies LASSO (glmnet has other purposes)
+lasso_mod_10 <- glmnet(x, y, alpha = 1, lambda = 10)
+
+# Print the coefficient estimates
+predict(lasso_mod_10, type = "coefficients")
+```
+
+```{r}
+lm_hits <- lm(Salary ~ ., Hitters)
+summary(lm_hits)
+```
+
+The coefficients are way smaller in the Lasso model.
+
+```{r}
+lasso_mod_150 <- glmnet(x, y, alpha = 1, lambda = 150)
+predict(lasso_mod_150, type = "coefficients")
+```
+
+Only four variables remain after using a Lasso of 150.
+
+```{r}
+# Fit the LASSO for a grid of lambda
+lasso_mod <- glmnet(x, y, alpha = 1)
+
+# Plot a summary of these models
+plot(lasso_mod, xvar = "lambda", label = TRUE)
+```
+
+Variable 14 (division w) disappers out of the model at approximately log of 3 (shirnks to 0). 
+At log(4) 6 predictors would remain.
+Walks is the more important variable predictor as it doesn't cancel out to 0 until later than division w.
+
+```{r}
+# Set the random number seed
+set.seed(2018)
+
+# Calculate the CV error rate for the LASSOs at each lambda
+lasso_cv <- cv.glmnet(x, y, alpha = 1)
+
+# Plot the CV results
+plot(lasso_cv)
+```
+
+If lambda is too small, we don't remove any predictors, but if it is too large, we remove to many and our MSPE increases. From this plot, it looks like the ideal lambda is 3. 
+
+We might use LASSO with lambda.1se instead of lambda.min because it reduces the number of predictors in our model further, without increased our total MSPE too much.
+
+```{r}
+# Grab the specific lambda.1se value
+lambda_best <- lasso_cv$lambda.1se
+lambda_best
+log(lambda_best)   # This should align with what you see in the plot!
+
+# Get the CV error at this lambda
+# (try to pick apart this syntax!)
+lasso_cv$cvm[which(lasso_cv$lambda == lambda_best)] #set lambda to lambda_best, then select that lasso_cv and get the cvm
+
+# Grab the coefficients for the LASSO using this lambda
+lasso_coef <- predict(lasso_mod, type = "coefficients", s = lambda_best)
+lasso_coef
+```
+
+```{r}
+# Grab the specific lambda.1se value
+lambda_best <- 63.23532
+lambda_best
+log(lambda_best)   # This should align with what you see in the plot!
+
+# Get the CV error at this lambda
+# (try to pick apart this syntax!)
+lasso_cv$cvm[which(lasso_cv$lambda == lambda_best)]
+
+# Grab the coefficients for the LASSO using this lambda
+lasso_coef <- predict(lasso_mod, type = "coefficients", s = lambda_best)
+lasso_coef
+```
+
+And the least squares model:
+
+```{r}
+# Load the boot package
+library(boot)    
+
+# Note the use of glm, not lm and the use of the full Auto data
+lm_model <- glm(Salary ~ ., Hitters_sub, family = "gaussian")
+lm_cv  <- cv.glm(Hitters_sub, lm_model)
+lm_cv$delta
+```
+
+
+The predictors that remain in the model are hits, walks, CRuns, CRBI, DivisionW, and PutOuts. A lot of these statistics are batting statistics, which makes sense, as if you can hit, you'll get paid more. From the errors, we can see that the cv error for the Lasso model where the cv is minimized (140,509) is higher than the linear model (118,039), but it has a lot less predictors (5 vs 19), making it a better model. The coefficients are also less than the least squares model, which makes sense since the LASSO method is a shrinkage method. 

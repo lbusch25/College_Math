@@ -1,0 +1,319 @@
+---
+title: "Homework 8"
+author: "Lawson Busch"
+date: "11/11/2018"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+# Packages and Data
+
+```{r warning = FALSE, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(ISLR)
+library(MASS)
+library(glmnet)
+library(boot)
+library(pROC)
+data(Smarket)
+
+# See the codebook
+?Smarket
+```
+
+
+# Excercises
+
+## Excercise 1
+
+```{r}
+train <- Smarket %>%
+  filter(Year != 2005)
+
+test <- Smarket %>%
+  filter(Year == 2005)
+```
+
+## Excersise 2
+
+### 2a)
+
+To get the number of days of stock market data for each year in our training data set:
+```{r}
+train_days <- train %>%
+  group_by(Year) %>%
+  summarize(days = n())
+
+head(train_days)
+```
+
+### 2b)
+
+To get the greatest observed loss (for a given day):
+```{r}
+dplyr::filter(train, Today == min(Today))
+```
+
+Or that the greatest observed loss is -4.922.
+
+To get the greatest observed gain (for a given day):
+
+```{r}
+dplyr::filter(train, Today == max(Today))
+```
+
+From the above we can see that the greatest observed gain is 5.733.
+
+To get the percentage of the days that the stocks went "Up":
+
+```{r}
+nrow(dplyr::filter(train, Direction == "Up")) / nrow(train)
+```
+
+Or that the stocks went "Up" on approximately 50% of days.
+
+### 2c)
+
+```{r}
+ggplot(train, aes(x = Lag1, fill = Direction)) + geom_density(alpha = 0.5)
+ggplot(train, aes(x = Lag2, fill = Direction)) + geom_density(alpha = 0.5)
+ggplot(train, aes(x = Lag3, fill = Direction)) + geom_density(alpha = 0.5)
+ggplot(train, aes(x = Lag4, fill = Direction)) + geom_density(alpha = 0.5)
+ggplot(train, aes(x = Lag5, fill = Direction)) + geom_density(alpha = 0.5)
+```
+
+From the above plots, we can see that there are in general more "Up" days than "Down" days for every lag, and that these days are more tightly condensed around a Lag value of 0 (again for every lag), while the "Down" are slightly more spread out around 0. Overall, there is a lot of overlap in Lag values for the "Up" and "Down" directions.
+
+### 2d)
+
+```{r}
+run_lengths <- data.frame(lengths = rle(as.numeric(train$Direction))$length)
+```
+
+```{r}
+ggplot(run_lengths, aes(x = lengths)) + geom_histogram(bins = 10, color = "white")
+```
+
+From the above plot, we can see that by far the most common run is 1 day, which is essentially no run. We can see that runs of 2, 3, and even 4 days are fairly common, but decrease with each increase in days. We can also see that runs longer than 4 days are virtually nonexistant. 
+
+## Excercise 3
+
+### 3a)
+
+Both Logistic Regression and QDA are valid techniques because Direction is a binomial factor. This means that we can use Logistic Regression, because Direction is binomial, and QDA is applicable to binomial factors as well. 
+
+### 3b)
+
+```{r}
+log_1 <- glm(factor(Direction) ~ Lag1 + Lag2 + Lag3 + Lag4 + Lag5, train, family="binomial")
+qda_1 <- qda(Direction ~ Lag1 + Lag2 + Lag3 + Lag4 + Lag5, data = train)
+summary(log_1)
+summary(qda_1)
+```
+
+### 3c)
+
+```{r}
+log_l1 <- glm(factor(Direction) ~ Lag1, train, family="binomial")
+log_l2 <- glm(factor(Direction) ~ Lag2, train, family="binomial")
+log_l3 <- glm(factor(Direction) ~ Lag3, train, family="binomial")
+log_l4 <- glm(factor(Direction) ~ Lag4, train, family="binomial")
+log_l5 <- glm(factor(Direction) ~ Lag5, train, family="binomial")
+```
+
+```{r}
+# Store the true classes of the cases
+true_Direction <- test$Direction
+
+# Calculate the probability predictions for each case
+prob_pred  <- predict(log_l1, newdata = test, type = "response")
+
+# Summarize the quality of these classifications using 0.5 cut-off
+tab <- table(true_Direction, prob_pred >= 0.5)
+
+sum(diag(tab)/sum(tab))
+```
+
+```{r}
+# Calculate the probability predictions for each case
+prob_pred  <- predict(log_l2, newdata = test, type = "response")
+
+# Summarize the quality of these classifications using 0.5 cut-off
+tab <- table(true_Direction, prob_pred >= 0.5)
+
+sum(diag(tab)/sum(tab))
+```
+
+```{r}
+# Calculate the probability predictions for each case
+prob_pred  <- predict(log_l3, newdata = test, type = "response")
+
+# Summarize the quality of these classifications using 0.5 cut-off
+tab <- table(true_Direction, prob_pred >= 0.5)
+
+sum(diag(tab)/sum(tab))
+```
+
+```{r}
+# Calculate the probability predictions for each case
+prob_pred  <- predict(log_l4, newdata = test, type = "response")
+
+# Summarize the quality of these classifications using 0.5 cut-off
+tab <- table(true_Direction, prob_pred >= 0.5)
+
+sum(diag(tab)/sum(tab))
+```
+
+```{r}
+# Calculate the probability predictions for each case
+prob_pred  <- predict(log_l5, newdata = test, type = "response")
+
+# Summarize the quality of these classifications using 0.5 cut-off
+tab <- table(true_Direction, prob_pred >= 0.5)
+
+sum(diag(tab)/sum(tab))
+```
+
+To find the best two "Lag" predictors, I made a logistic regression model for each individual "Lag" predictor using the training data set. I then used to the test data set to calculate their predictions and test for overall accuracy of these predictions. From the above calculations, it is clear that "Lag1" model (54% accuracy) and the "Lag2" model (59% accuracy) provide the best predictions. Thus, I concluded that the best two predictors are the "Lag1" and "Lag2" predictors.
+
+### 3d)
+
+```{r}
+log_2 <- glm(factor(Direction) ~ Lag1 + Lag2, train, family="binomial")
+qda_2 <- qda(Direction ~ Lag1 + Lag2, data = train)
+summary(log_2)
+summary(qda_2)
+```
+
+### 3e)
+
+```{r}
+exp(-0.05562)
+exp(-0.04449)
+```
+
+
+To intepret these coefficients, it is best to convert them from log(odds) for to odds form. Currently, we can see that for every unit increase in "Lag1", the log(odds) of the market being "Up" decrease by 0.05562, and for every unit increase in "Lag2", the log(odds) of the market being "Up" decrease by -0.04449. If we exponentiate, we can see that for every unit increase in "Lag1", the odds of the market being "Up" decrease by a multiplicative factor of 0.9458985, and for every unit increase in "Lag2", the odds of the market being "Up" decrease by a multiplicative factor of 0.9564852.
+
+## Excercise 4
+
+### 4a)
+
+```{r}
+predict_data = data.frame(Lag1=2.0, Lag2=-2.0, Lag3=-4.0, Lag4=1.0, Lag5=2.0)
+```
+
+To predict using all five Lags:
+```{r}
+# Calculate the probability predictions for each case
+prob_pred  <- predict(log_1, newdata = predict_data, type = "response")
+
+prob = exp(prob_pred)/(1 + exp(prob_pred))
+prob
+```
+
+```{r}
+# Calculate the probability predictions for each case
+prob_pred  <- predict(qda_1, newdata = predict_data, type = "response")
+prob_pred
+```
+
+To predict using Lag1 and Lag2:
+
+```{r}
+# Calculate the probability predictions for each case
+prob_pred  <- predict(log_2, newdata = predict_data, type = "response")
+
+prob = exp(prob_pred)/(1 + exp(prob_pred))
+prob
+```
+
+
+```{r}
+prob_pred  <- predict(qda_2, newdata = predict_data, type = "response")
+prob_pred
+```
+
+### 4b)
+
+Comparing these predictions, we see that both the logistic models predict the probability of the market going "Up" to be around 62%. The qda_1 model, using all five Lag predictors, predicts the probability of the market going "Up" at around 29%, while the qda_2 model using Lag1 and Lag2 predicts the probability of the market going "Up" at about 49%. So using different models can lead to different market predictions, as both the qda models (especially qda_1), lean towards the market going "Down", while both the logistic models lean towards the market going "Up". Thus, different models definately lead to different market actions.
+
+## Excercise 5
+
+### 5a)
+
+```{r}
+direction <- train$Direction
+roc(response = direction, pred = log_1$fitted, plot = TRUE, legacy.axes = TRUE)
+roc(response = direction, pred = log_2$fitted, plot = TRUE, legacy.axes = TRUE, add = TRUE, col = 2) #red
+roc(response = direction, pred = predict(qda_1, newdata = train)$posterior[,2], plot = TRUE, legacy.axes = TRUE, add = TRUE, col = 3) #green
+roc(response = direction, pred = predict(qda_2, newdata = train)$posterior[,2], plot = TRUE, legacy.axes = TRUE, add = TRUE, col = 4) #blue
+``` 
+
+### 5b)
+
+To classify the direction for the first logistic model:
+```{r}
+# Calculate the probability predictions for each case
+prob_pred  <- predict(log_1, newdata = test, type = "response")
+
+# Summarize the quality of these classifications using 0.5 cut-off
+tab <- table(true_Direction, prob_pred >= 0.5)
+prop.table(tab, margin = 1)
+
+sum(diag(tab)/sum(tab))
+```
+
+From the above, we can see that the sensitivity is approximately 0.78, the specificity is 0.33, and the overall accuracy for this model is approximately 0.59 for the log_1 model.
+
+To classify the direction for the second logistic model:
+```{r}
+# Calculate the probability predictions for each case
+prob_pred  <- predict(log_2, newdata = test, type = "response")
+
+# Summarize the quality of these classifications using 0.5 cut-off
+tab <- table(true_Direction, prob_pred >= 0.5)
+prop.table(tab, margin = 1)
+
+sum(diag(tab)/sum(tab))
+```
+
+From the above, we can see that the sensitivity is approximately 0.75, the specificity is 0.31, and the overall accuracy for this model is approximately 0.56 for the  log_2 model.
+
+
+To classify the direction for the first quadratic model:
+```{r}
+# Calculate the probability predictions for each case
+prob_pred  <- predict(qda_1, newdata = test, type = "response")$posterior[,2]
+
+# Summarize the quality of these classifications using 0.5 cut-off
+tab <- table(true_Direction, prob_pred >= 0.5)
+prop.table(tab, margin = 1)
+
+sum(diag(tab)/sum(tab))
+```
+
+From the above, we can see that the sensitivity is approximately 0.75, the specificity is 0.33, and the overall accuracy for this model is approximately 0.57 for the  qda_1 model.
+
+To classify the direction for the second quadratic model:
+```{r}
+# Calculate the probability predictions for each case
+prob_pred  <- predict(qda_2, newdata = test, type = "response")$posterior[,2]
+
+# Summarize the quality of these classifications using 0.5 cut-off
+tab <- table(true_Direction, prob_pred >= 0.5)
+prop.table(tab, margin = 1)
+
+sum(diag(tab)/sum(tab))
+```
+
+From the above, we can see that the sensitivity is approximately 0.86, the specificity is 0.27, and the overall accuracy for this model is approximately 0.6 for the  qda_2 model.
+
+### 5c)
+
+In light of the above calculations, I would say that the qda_2 model provides the best classifications for market behavior. This is due to the fact that it correctly picks 86% of the days that the market will go "Up" and has an overall accuracy rate of 60%. However, I would say that if we care more apout the specificity of our model, I would choose log_1, as it predicts "Down" days significantly better than the qda_2 model (33% accuracy compared to 27% accuracy, respectively), while having a comparable overall accuracy rate of 59%.
+
+However, it should be noted that none of these classification models are that much better than just flipping a coin. If we flipped a coin for up or down, our prediction should be accurate 50% of the time, and our best models only have an accuracy rate of 59-60%, which is not much better. Further, if we look at the ROC curve plot, all of the model's lines lie close to the strait grey line indicated a coin flip, visually demonstrating that our models are not really that much better than flipping a coin.

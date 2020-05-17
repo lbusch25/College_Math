@@ -1,0 +1,166 @@
+---
+title: "Bootstrapping"
+author: "Lawson Busch"
+date: "10/2/2018"
+output: html_document
+---
+
+## Bootstrapping Example
+
+Using this sample of 27 MAC students, estimate the population of all Mac students. (CLT most likely won't hold.)
+
+```{r}
+students <- c("Rohit", "Milo", "Lawson", "Yuxiang", "Sean",
+              "Emma", "Sebastian", "Mark", "Cuau", "Andrew", 
+              "Joe", "Jin", "Erle", "Esteban", "Tianyou",
+              "Kieran", "Graham", "Raven", "Sofia", "Risa",
+              "Ximena", "Zach", "Mia", "Zhen", "Onur",
+              "Ruiqi", "Xuchen")
+length(students)
+```
+
+To take a sample:
+We want to take a sample that is the same size as our actual sample (assumes we have a bunch of samples of 27 people).
+Problem with this is that it is the same data, just a different order. 
+```{r}
+library(dplyr)
+library(ggplot2)
+sample(students, size = 27, replace = FALSE)
+```
+
+So to get the idea of Bootstrapping, we can sample with replacement:
+```{r}
+sample(students, size = 27, replace = TRUE)
+```
+
+Observing 4 Raven's is fine because it is analogous to observing four similar but unique people. In other words, its like we are creating a new sample. 
+
+In bootstrapping, we just resample over and over and over to imitate a true sampling distribution.
+
+Ultimate goal is to understand variation from sample to sample without assumption of normality. By resampling and calculating distribution for each sample, we get the Bootstrap distribution.
+
+We can then use the Bootstrap distribution (which is slightly different than the sampling distribution, aka not centered at the true $Beta$), to calculate confidence intervals and P-values. While we might not get the right location, we get the right spread.
+
+## Excercises
+One way to do resampling (our own code):
+```
+slopes <- rep(0, 1000)
+for(i in 1:1000){
+    # Take a resample
+    resamp <- sample_n(data, size = n, replace = TRUE)
+    
+    # Fit a model using the resample
+    remod <- lm(y ~ x, data = resamp)
+    
+    # Store the slope
+    slopes[i] <- coef(remod)[1]
+}
+
+# Check out the 1000 slopes
+slopes
+```
+
+But we have functions that can do this in tidyverse packages:
+
+```{r}
+joy <- read.csv("https://www.macalester.edu/~ajohns24/data/joy_division.csv")
+
+joy %>% 
+    summarize(mean(track_popularity))
+
+
+joy %>% 
+    summarize(max(tempo))
+```
+
+The summarize function adds up all rows of the specified columns in a data frame and then performs an operation on them.
+
+The group by verb tells summarize to group by a categorical variable. To find the fastest tempo on each album we can:
+
+```{r}
+joy %>% 
+    group_by(album_name) %>% 
+    summarize(max(tempo))
+```
+
+## Group by with do()
+
+```{r}
+# Load broom package for tidy()
+library(broom)
+
+joy %>% 
+    do(lm(track_popularity ~ tempo, data = .) %>% tidy())
+```
+
+The do() function allows you to specify a computation to perform on a data frame.
+
+```{r}
+ggplot(joy, aes(x = tempo, y = track_popularity, group = album_name)) + 
+    geom_smooth(method = "lm", se = FALSE)
+```
+
+Models group_by album name.
+
+```{r}
+album_models <- joy %>% 
+  group_by(album_name) %>%
+  do(lm(track_popularity ~ tempo, data = .) %>% tidy())
+```
+
+Keep only terms with the Intercept.
+
+```{r}
+album_models <- joy %>% 
+  group_by(album_name) %>%
+  do(lm(track_popularity ~ tempo, data = .) %>% tidy()) %>%
+  filter(term == '(Intercept)')
+```
+
+## Focus on the closer album
+
+```{r}
+joy_sub <- joy %>% 
+    filter(album_name == "Closer")
+```
+
+```{r}
+# Load the infer package
+library(infer)
+```
+
+```{r}
+#Takes a sample of size three no replace one time
+rep_sample_n(joy_sub, size = 3, replace = FALSE, reps = 1)
+
+#Takes a sample of size three no replace two times
+rep_sample_n(joy_sub, size = 3, replace = FALSE, reps = 2)
+
+#Takes a sample of size three with replace one time
+rep_sample_n(joy_sub, size = 3, replace = TRUE, reps = 1)
+
+#Takes a sample of size three with replace two times
+rep_sample_n(joy_sub, size = 3, replace = TRUE, reps = 2)
+```
+
+100 resamples of the joy_sub:
+We use the number of rows as the size of each resample, with replacement, and do this 100 times.
+```{r}
+n = nrow(joy_sub)
+joy_resamples <- rep_sample_n(joy_sub, size = n, replace = TRUE, reps = 100)
+```
+
+Plotting the resampled models:
+```{r}
+ggplot(joy_resamples, aes(x = tempo, y = track_popularity, group = replicate)) + 
+    geom_smooth(method = "lm", se = FALSE)
+```
+
+To get the model coefficeints:
+```{r}
+tempo_models <- joy_resamples %>%
+  group_by(replicate) %>%
+  do(lm(track_popularity ~ tempo, data = .) %>% tidy())
+
+head(tempo_models)
+```
